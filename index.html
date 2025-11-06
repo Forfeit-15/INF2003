@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mini IMDB</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="nav-left">
+      <button class="logo" id="home-logo" aria-label="Go to home">Mini IMDB</button>
+
+      <form class="search-form" onsubmit="return false;">
+        <input type="text" id="search-input" placeholder="Search..." aria-label="Search movies" />
+      </form>
+
+      <div class="nav-menu">
+        <div class="dropdown">
+          <span class="dropbtn" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">Genre ▾</span>
+          <div class="dropdown-content" id="genre-menu" role="menu"></div>
+        </div>
+        <div class="dropdown">
+          <span class="dropbtn" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">Year ▾</span>
+          <div class="dropdown-content" id="year-menu" role="menu"></div>
+        </div>
+        <div class="dropdown">
+          <span class="dropbtn" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">Rating ▾</span>
+          <div class="dropdown-content" id="rating-menu" role="menu"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Menu -->
+    <div class="dropdown profile">
+      <button class="profile-btn" id="profile-btn" aria-haspopup="true" aria-expanded="false" aria-label="Profile menu">
+        <span class="avatar-circle">👤</span>
+      </button>
+      <div class="dropdown-content right" id="profile-menu" role="menu"></div>
+    </div>
+  </nav>
+
+  <main class="content">
+    <section id="movies">
+      <h1>Movies & Shows</h1>
+      <p id="movies-count" aria-live="polite"></p>
+      <div id="movies-container" class="cards"></div>
+    </section>
+
+    <section id="actors">
+      <h1>People</h1>
+      <p id="actors-count" aria-live="polite"></p>
+      <div id="actors-container" class="cards"></div>
+    </section>
+
+    <section id="genres">
+      <h1>Genres</h1>
+      <p id="genres-count" aria-live="polite"></p>
+      <div id="genres-container" class="cards"></div>
+    </section>
+  </main>
+
+  <!-- Watchlist Modal -->
+  <div class="modal" id="watchlist-modal" hidden role="dialog" aria-labelledby="watchlist-title" aria-modal="true">
+    <div class="modal-backdrop" id="watchlist-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="watchlist-title">Your Watchlist</h2>
+        <button id="watchlist-close" class="icon-btn" aria-label="Close watchlist">✕</button>
+      </div>
+      <div id="watchlist-body" class="watchlist-body"></div>
+    </div>
+  </div>
+
+  <!-- Movie Details + Reviews Modal -->
+  <div class="modal" id="movie-modal" hidden role="dialog" aria-labelledby="movie-title" aria-modal="true">
+    <div class="modal-backdrop" id="movie-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="movie-title">Movie</h2>
+        <button id="movie-close" class="icon-btn" aria-label="Close movie details">✕</button>
+      </div>
+
+      <div id="movie-meta" class="meta" style="margin-bottom:.75rem;"></div>
+
+      <section aria-labelledby="reviews-heading">
+        <h3 id="reviews-heading" style="margin:.75rem 0 .25rem 0;">Reviews</h3>
+        <div id="reviews-list" class="reviews-list"></div>
+      </section>
+
+      <section aria-labelledby="add-review-heading" style="margin-top:1rem;">
+        <h3 id="add-review-heading" style="margin:.75rem 0 .25rem 0;">Add your review</h3>
+        <form id="review-form" class="review-form">
+          <!-- Star rating widget -->
+          <div class="form-row">
+            <label id="star-rating-label">Stars</label>
+            <div id="star-rating" class="star-rating" role="radiogroup" aria-labelledby="star-rating-label" aria-label="Star rating out of 10">
+              <button type="button" class="star" data-value="1" aria-label="1 star" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="2" aria-label="2 stars" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="3" aria-label="3 stars" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="4" aria-label="4 stars" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="5" aria-label="5 stars" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="6" aria-label="6 stars" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="7" aria-label="7 stars" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="8" aria-label="8 stars" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="9" aria-label="9 stars" aria-checked="false" role="radio">☆</button>
+              <button type="button" class="star" data-value="10" aria-label="10 stars" aria-checked="false" role="radio">☆</button>
+              <span id="star-hint" class="star-hint" aria-live="polite"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label for="review-text">Your thoughts</label>
+            <textarea id="review-text" rows="3" placeholder="Share what you liked (or didn’t)..." required></textarea>
+          </div>
+
+          <div class="form-row">
+            <label for="review-tags">Tags (comma-separated)</label>
+            <input id="review-tags" type="text" placeholder="soundtrack, pacing" />
+          </div>
+
+          <div class="form-row checkbox-row">
+            <label><input id="review-spoiler" type="checkbox" /> Contains spoilers</label>
+          </div>
+
+          <button type="submit" class="icon-btn" style="margin-top:.25rem;">Post review</button>
+          <p id="review-error" class="error-msg" role="alert" aria-live="assertive"></p>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
