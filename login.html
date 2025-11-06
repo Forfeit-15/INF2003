@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login — Mini IMDB</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+
+<body class="login-body">
+  <div class="login-container">
+    <h1>Mini IMDB</h1>
+
+    <form id="login-form" class="login-form" autocomplete="on">
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="you@example.com" required autocomplete="email" />
+
+      <label for="password">Password</label>
+      <input id="password" type="password" placeholder="Enter password" required autocomplete="current-password" />
+
+      <button type="submit">Log In</button>
+      <p id="error-msg" class="error-msg" role="alert" aria-live="assertive"></p>
+      <p class="login-hint">Tip: use <kbd>demo@example.com</kbd> / <kbd>1234</kbd> when backend is offline.</p>
+    </form>
+  </div>
+
+  <script src="../js/login.js"></script>
+</body>
+</html>
