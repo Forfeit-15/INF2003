@@ -955,7 +955,7 @@ function renderMoviesPaged(list, page = 1) {
   moviesRaw = list;
   moviesPage = page;
 
-  const p = paginate(list, page, 12);
+  const p = paginate(list, page, 14);
   renderMovies(p.items);
 
   renderPagination(
@@ -973,7 +973,7 @@ function renderActorsPaged(list, page = 1) {
   actorsRaw = list;
   actorsPage = page;
 
-  const p = paginate(list, page, 12);
+  const p = paginate(list, page, 15);
   renderActors(p.items);
 
   renderPagination(
@@ -1019,6 +1019,38 @@ function renderTopUserRatedPaged(list, page = 1) {
     (pg) => renderTopUserRatedPaged(topUserRaw, pg)
   );
 }
+
+// === Top User Rated horizontal nav ===
+const topUserPrev = document.querySelector(".topuser-prev");
+const topUserNext = document.querySelector(".topuser-next");
+
+function updateTopUserNavState() {
+  if (!topUserContainer || !topUserPrev || !topUserNext) return;
+
+  const maxScroll = topUserContainer.scrollWidth - topUserContainer.clientWidth;
+  const x = topUserContainer.scrollLeft || 0;
+
+  topUserPrev.disabled = x <= 1;
+  topUserNext.disabled = x >= maxScroll - 1;
+}
+
+if (topUserContainer && topUserPrev && topUserNext) {
+  const scrollAmount = () =>
+    Math.max(260, Math.floor(topUserContainer.clientWidth * 0.9));
+
+  topUserPrev.addEventListener("click", () => {
+    topUserContainer.scrollBy({ left: -scrollAmount(), behavior: "smooth" });
+  });
+
+  topUserNext.addEventListener("click", () => {
+    topUserContainer.scrollBy({ left: scrollAmount(), behavior: "smooth" });
+  });
+
+  topUserContainer.addEventListener("scroll", updateTopUserNavState);
+
+  requestAnimationFrame(updateTopUserNavState);
+}
+
 
 /* ================================
    DROPDOWNS
