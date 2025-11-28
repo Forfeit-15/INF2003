@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Manage Users — Mini IMDB</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body class="login-body">
+  <div class="login-container admin-container">
+    <h1>Manage Users</h1>
+    <p class="login-hint">Admin panel - view, update, and delete user accounts.</p>
+
+    <table class="user-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Email</th>
+          <th>Display name</th>
+          <th>Admin?</th>
+          <th>Active?</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="users-body">
+        <!-- filled by JS -->
+      </tbody>
+    </table>
+
+    <p id="admin-msg" class="error-msg" role="alert" aria-live="assertive"></p>
+
+    <p class="login-hint">
+      <a href="index.html">← Back to home</a>
+    </p>
+  </div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>

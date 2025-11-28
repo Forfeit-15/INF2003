@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Profile — Mini IMDB</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body class="login-body">
+  <div class="login-container">
+    <h1>My Profile</h1>
+
+    <form id="profile-form" class="login-form" autocomplete="on">
+      <label>Username (read-only)</label>
+      <input id="username" type="text" disabled />
+
+      <label>Email (read-only)</label>
+      <input id="email" type="email" disabled />
+
+      <label for="display_name">Display name</label>
+      <input id="display_name" type="text" placeholder="Your display name" />
+
+      <label for="bio">Bio</label>
+      <textarea id="bio" rows="3" placeholder="Tell us something about you..."></textarea>
+
+      <label for="password">New password (optional)</label>
+      <input id="password" type="password" placeholder="Leave blank to keep current password" />
+
+      <button type="submit">Save changes</button>
+      <p id="profile-msg" class="error-msg" role="alert" aria-live="assertive"></p>
+
+      <p class="login-hint">
+        <a href="index.html">← Back to home</a>
+      </p>
+    </form>
+  </div>
+
+  <script src="js/profile.js"></script>
+</body>
+</html>
