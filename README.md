@@ -71,7 +71,7 @@ db.createCollection("reviews", {
       properties: {
         tconst: { bsonType: "string", pattern: "^tt\\d{7,}$" },
         user_id:{ bsonType: "int" },
-        stars: { bsonType: "double", minimum: 0, maximum: 5 },
+        stars: { bsonType: ["int","double"], minimum: 0, maximum: 10 },
         text:   { bsonType: "string", minLength: 1, maxLength: 2000 },
         tags:   { bsonType: ["array"], items: {bsonType:"string"} },
         spoiler:{ bsonType: ["bool","null"] },
