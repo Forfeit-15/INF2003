@@ -1,14 +1,14 @@
 /* =========================================================
-   Mini IMDB – Frontend-Only App (SQL/NoSQL aligned fallbacks)
-   - NO BACKEND CALLS (pure front-end)
-   - Reviews: NoSQL-shaped, 1-per-user per tconst with overwrite prompt, delete
-   - Watchlist: LEGACY first (localStorage.watchlist) + mirror to NoSQL Lists
-   - Search logs: NoSQL-shaped (localStorage.search_logs)
+   Mini IMDB – Frontend App (SQL/NoSQL aligned)
+   - Reviews: frontend-only (localStorage) + hard-coded others
+   - Watchlist: legacy localStorage + “View Watchlist” in profile
+   - Search logs: localStorage
 ========================================================= */
 
 /* ================================
    DOM ELEMENTS
 ==================================*/
+
 const moviesContainer = document.getElementById("movies-container");
 const moviesCount = document.getElementById("movies-count");
 
@@ -18,6 +18,9 @@ const actorsCount = document.getElementById("actors-count");
 const genresContainer = document.getElementById("genres-container");
 const genresCount = document.getElementById("genres-count");
 
+const topUserContainer = document.getElementById("top-user-container");
+const topUserCount = document.getElementById("top-user-count");
+
 const searchInput = document.getElementById("search-input");
 
 const genreMenu = document.getElementById("genre-menu");
@@ -26,334 +29,519 @@ const ratingMenu = document.getElementById("rating-menu");
 
 const homeLogo = document.getElementById("home-logo");
 
-// Profile + watchlist
+/* profile dropdown */
 const profileBtn = document.getElementById("profile-btn");
 const profileMenu = document.getElementById("profile-menu");
+
+/* watchlist modal */
 const watchlistModal = document.getElementById("watchlist-modal");
 const watchlistBackdrop = document.getElementById("watchlist-backdrop");
 const watchlistClose = document.getElementById("watchlist-close");
 const watchlistBody = document.getElementById("watchlist-body");
 
-// Movie detail + reviews
+/* movie modal + reviews */
 const movieModal = document.getElementById("movie-modal");
 const movieBackdrop = document.getElementById("movie-backdrop");
-const movieClose = document.getElementById("movie-close");
 const movieTitle = document.getElementById("movie-title");
 const movieMeta = document.getElementById("movie-meta");
 const reviewsList = document.getElementById("reviews-list");
 const reviewForm = document.getElementById("review-form");
 const reviewText = document.getElementById("review-text");
 const reviewTags = document.getElementById("review-tags");
-const reviewSpoiler = document.getElementById("review-spoiler");
+const spoilerCheckbox = document.getElementById("review-spoiler");
 const reviewError = document.getElementById("review-error");
-const starRating = document.getElementById("star-rating");
+const movieClose = document.getElementById("movie-close");
+
+/* star rating widget */
+const starContainer = document.getElementById("star-rating"); // radiogroup
 const starHint = document.getElementById("star-hint");
 
+/* timeout handler */
+let searchLogTimeout = null;
+
+const searchLogModal = document.getElementById("searchlog-modal");
+const searchLogBackdrop = document.getElementById("searchlog-backdrop");
+const searchLogClose = document.getElementById("searchlog-close");
+const searchLogBody = document.getElementById("searchlog-body");
+
+/* search history button (next to search bar) */
+const searchHistoryBtn = document.getElementById("search-history-btn");
+
+
 /* ================================
-   CONSTANTS / FALLBACK (SQL-shaped)
+   CONSTANTS / FALLBACK DATA
 ==================================*/
+
 const YEAR_RANGES = [
   { label: "2020 — 2025", start: 2020, end: 2025 },
   { label: "2010 — 2019", start: 2010, end: 2019 },
   { label: "2000 — 2009", start: 2000, end: 2009 },
   { label: "1990 — 1999", start: 1990, end: 1999 },
-  { label: "Before 1990", start: 0, end: 1989 },
+  { label: "Before 1990", start: 0, end: 1989 }
 ];
 
-/* ---------- SQL tables (fallback) ---------- */
-const SQL_TITLE = [
-  { tconst: "tt1375666", titleType: "movie", primaryTitle: "Inception", originalTitle: "Inception", isAdult: 0, startYear: 2010, endYear: null, runtimeMinutes: 148 },
-  { tconst: "tt0468569", titleType: "movie", primaryTitle: "The Dark Knight", originalTitle: "The Dark Knight", isAdult: 0, startYear: 2008, endYear: null, runtimeMinutes: 152 },
-  { tconst: "tt0816692", titleType: "movie", primaryTitle: "Interstellar", originalTitle: "Interstellar", isAdult: 0, startYear: 2014, endYear: null, runtimeMinutes: 169 },
-  { tconst: "tt6751668", titleType: "movie", primaryTitle: "Parasite", originalTitle: "Gisaengchung", isAdult: 0, startYear: 2019, endYear: null, runtimeMinutes: 132 },
-  { tconst: "tt0120338", titleType: "movie", primaryTitle: "Titanic", originalTitle: "Titanic", isAdult: 0, startYear: 1997, endYear: null, runtimeMinutes: 194 },
-];
-
-const SQL_GENRE = [
-  { genreID: 1, genreName: "Action" },
-  { genreID: 2, genreName: "Sci-Fi" },
-  { genreID: 3, genreName: "Drama" },
-  { genreID: 4, genreName: "Thriller" },
-  { genreID: 5, genreName: "Romance" },
-];
-
-const SQL_HAS_GENRE = [
-  { tconst: "tt1375666", genreID: 2 }, { tconst: "tt1375666", genreID: 4 },
-  { tconst: "tt0468569", genreID: 1 }, { tconst: "tt0468569", genreID: 3 },
-  { tconst: "tt0816692", genreID: 2 }, { tconst: "tt0816692", genreID: 3 },
-  { tconst: "tt6751668", genreID: 4 }, { tconst: "tt6751668", genreID: 3 },
-  { tconst: "tt0120338", genreID: 5 }, { tconst: "tt0120338", genreID: 3 },
-];
-
-const SQL_RATING = [
-  { tconst: "tt1375666", averageRating: 8.8, numVotes: 2400000 },
-  { tconst: "tt0468569", averageRating: 9.0, numVotes: 2800000 },
-  { tconst: "tt0816692", averageRating: 8.6, numVotes: 1900000 },
-  { tconst: "tt6751668", averageRating: 8.6, numVotes: 900000 },
-  { tconst: "tt0120338", averageRating: 7.9, numVotes: 1300000 },
-];
-
-const SQL_TITLE_AKAS = {
+/* “other people’s reviews” hard-coded */
+const FALLBACK_REVIEWS = {
   tt1375666: [
-    { titleId: "tt1375666", ordering: 1, title: "Inception", region: "US", language: "en", types: ["imdbDisplay"], attributes: [], isOriginalTitle: true },
-    { titleId: "tt1375666", ordering: 2, title: "Origin", region: "JP", language: "ja", types: ["working"], attributes: [], isOriginalTitle: false }
+    {
+      user_id: 7,
+      stars: 9,
+      text: "Mind-bending score and pacing.",
+      tags: ["music", "pacing"],
+      spoiler: false,
+      created_at: "2025-10-01T12:45:00Z"
+    },
+    {
+      user_id: 12,
+      stars: 9,
+      text: "Dream layers still hold up.",
+      tags: ["re-watchable"],
+      spoiler: false,
+      created_at: "2025-11-01T08:12:00Z"
+    }
   ],
-  tt0120338: [
-    { titleId: "tt0120338", ordering: 1, title: "Titanic", region: "US", language: "en", types: ["imdbDisplay"], attributes: [], isOriginalTitle: true }
+  tt0468569: [
+    {
+      user_id: 23,
+      stars: 10,
+      text: "Ledger's Joker steals the show.",
+      tags: ["performance", "villain"],
+      spoiler: false,
+      created_at: "2025-11-02T15:00:00Z"
+    }
   ]
 };
 
-const SQL_PERSON = [
-  { nconst: "nm0000138", primaryName: "Leonardo DiCaprio", birthYear: 1974, deathYear: null },
-  { nconst: "nm0000288", primaryName: "Christopher Nolan", birthYear: 1970, deathYear: null },
-  { nconst: "nm0000198", primaryName: "Kate Winslet", birthYear: 1975, deathYear: null },
-  { nconst: "nm0000114", primaryName: "James Cameron", birthYear: 1954, deathYear: null },
-  { nconst: "nm0814280", primaryName: "Song Kang-ho", birthYear: 1967, deathYear: null },
-];
-
-const SQL_PROFESSION = [
-  { professionID: 1, professionName: "actor" },
-  { professionID: 2, professionName: "actress" },
-  { professionID: 3, professionName: "director" },
-  { professionID: 4, professionName: "writer" },
-];
-
-const SQL_HAS_PROFESSION = [
-  { nconst: "nm0000138", professionID: 1 },
-  { nconst: "nm0000288", professionID: 3 },
-  { nconst: "nm0000198", professionID: 2 },
-  { nconst: "nm0000114", professionID: 3 }, { nconst: "nm0000114", professionID: 4 },
-  { nconst: "nm0814280", professionID: 1 },
-];
-
-const SQL_PRINCIPALS = [
-  { tconst: "tt1375666", nconst: "nm0000288", ordering: 1, category: "director", job: null, characterName: null },
-  { tconst: "tt1375666", nconst: "nm0000138", ordering: 2, category: "actor", job: null, characterName: "Cobb" },
-  { tconst: "tt0120338", nconst: "nm0000114", ordering: 1, category: "director", job: null, characterName: null },
-  { tconst: "tt0120338", nconst: "nm0000198", ordering: 2, category: "actress", job: null, characterName: "Rose" },
-];
-
-/* ---------- NoSQL Reviews (fallback) ---------- */
-const FALLBACK_REVIEWS = {
-  tt1375666: [
-    { user_id: 7,  stars: 9, text: "Mind-bending score and pacing.", tags: ["soundtrack", "pacing"], spoiler: false, created_at: "2025-10-01T12:45:00Z" },
-    { user_id: 12, stars: 9, text: "Dream layers still hold up.",     tags: ["concept"],             spoiler: false, created_at: "2025-11-01T08:12:00Z" },
-  ],
-  tt0468569: [
-    { user_id: 23, stars: 10, text: "Ledger's Joker is unmatched.", tags: ["performance"], spoiler: false, created_at: "2025-09-20T10:00:00Z" },
-  ],
-};
-
 /* ================================
-   AUTH / USER HELPERS
+   AUTH (FAKE)
 ==================================*/
-const isLoggedIn = () => !!localStorage.getItem("user");
-function getUserId() {
-  const raw = localStorage.getItem("user");
-  if (!raw) return 42; // stable demo id so features work logged-out
+
+function isLoggedIn() {
+  return !!localStorage.getItem("user");
+}
+
+function getUser() {
   try {
-    const u = JSON.parse(raw);
-    return (u && (u.user_id ?? u.id)) ?? 42;
-  } catch { return 42; }
+    return JSON.parse(localStorage.getItem("user") || "null");
+  } catch {
+    return null;
+  }
+}
+
+function getUserId() {
+  const u = getUser();
+  if (!u) return 42; // anonymous
+  return u.id || u.user_id || 42;
+}
+
+function setUser(user) {
+  localStorage.setItem("user", JSON.stringify(user));
+}
+
+function clearUser() {
+  localStorage.removeItem("user");
 }
 
 /* ================================
-   WATCHLIST (legacy-first + NoSQL mirror)
+   PROFILE DROPDOWN
 ==================================*/
-// Legacy store (what the UI reads/writes)
-function getLegacyWatchlist() {
-  try { return JSON.parse(localStorage.getItem("watchlist") || "[]"); }
-  catch { return []; }
+
+function closeAllDropdowns(exceptMenu) {
+  document.querySelectorAll(".dropdown .dropdown-content").forEach((c) => {
+    if (exceptMenu && c === exceptMenu) return; // keep this menu open
+
+    c.style.opacity = "0";
+    c.style.transform = "translateY(-5px)";
+    setTimeout(() => {
+      if (exceptMenu && c === exceptMenu) return; // extra safety
+      c.style.display = "none";
+    }, 150);
+  });
+
+  document
+    .querySelectorAll(".dropbtn, .profile-btn")
+    .forEach((b) => b.setAttribute("aria-expanded", "false"));
 }
-function setLegacyWatchlist(arr) {
-  localStorage.setItem("watchlist", JSON.stringify(arr));
-}
-// NoSQL Lists doc (mirror only; per-user)
-function getListDoc() {
-  const user_id = getUserId();
-  const all = JSON.parse(localStorage.getItem("lists") || "{}");
-  if (!all[user_id]) {
-    all[user_id] = { user_id, items: [], created_at: new Date().toISOString() };
-    localStorage.setItem("lists", JSON.stringify(all));
+
+
+/* dynamic menu like your original version */
+function populateProfileMenu() {
+  if (!profileMenu) return;
+  const logged = isLoggedIn();
+  profileMenu.innerHTML = "";
+
+  // View watchlist (always present)
+  const viewWL = document.createElement("button");
+  viewWL.textContent = "View watchlist";
+  viewWL.className = "menu-item";
+  viewWL.setAttribute("role", "menuitem");
+  viewWL.addEventListener("click", () => {
+    if (!logged) {
+      window.location.href = "login.html";
+      return;
+    }
+    openWatchlist();
+    closeAllDropdowns();
+  });
+  profileMenu.appendChild(viewWL);
+
+  if (logged) {
+    const user = getUser();
+
+    // My Profile
+    const myProfile = document.createElement("button");
+    myProfile.textContent = "My profile";
+    myProfile.className = "menu-item";
+    myProfile.setAttribute("role", "menuitem");
+    myProfile.addEventListener("click", () => {
+      window.location.href = "profile.html";
+    });
+    profileMenu.appendChild(myProfile);
+
+    // Admin: Manage users
+    if (user && user.is_admin) {
+      const manage = document.createElement("button");
+      manage.textContent = "Manage users";
+      manage.className = "menu-item";
+      manage.setAttribute("role", "menuitem");
+      manage.addEventListener("click", () => {
+        window.location.href = "admin.html";
+      });
+      profileMenu.appendChild(manage);
+    }
+
+    // Logout
+    const lo = document.createElement("button");
+    lo.textContent = "Logout";
+    lo.className = "menu-item";
+    lo.setAttribute("role", "menuitem");
+    lo.addEventListener("click", () => {
+      clearUser();
+      closeAllDropdowns();
+      loadAll(); // reload UI in logged-out state
+    });
+    profileMenu.appendChild(lo);
+
+  } else {
+    // Logged-out branch (keep your existing Login + Register)
+    const li = document.createElement("button");
+    li.textContent = "Login";
+    li.className = "menu-item";
+    li.setAttribute("role", "menuitem");
+    li.addEventListener("click", () => {
+      window.location.href = "login.html";
+    });
+    profileMenu.appendChild(li);
+
+    const reg = document.createElement("button");
+    reg.textContent = "Register";
+    reg.className = "menu-item";
+    reg.setAttribute("role", "menuitem");
+    reg.addEventListener("click", () => {
+      window.location.href = "register.html";
+    });
+    profileMenu.appendChild(reg);
   }
-  return all[user_id];
 }
-function setListDoc(doc) {
-  const all = JSON.parse(localStorage.getItem("lists") || "{}");
-  all[doc.user_id] = doc;
-  localStorage.setItem("lists", JSON.stringify(all));
+
+/* toggle profile dropdown via click */
+if (profileBtn && profileMenu) {
+  profileBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = profileMenu.style.display === "block";
+
+    if (isOpen) {
+      // close everything
+      closeAllDropdowns();
+    } else {
+      // close others, keep this one open
+      closeAllDropdowns(profileMenu);
+      profileBtn.setAttribute("aria-expanded", "true");
+      profileMenu.style.display = "block";
+      requestAnimationFrame(() => {
+        profileMenu.style.opacity = "1";
+        profileMenu.style.transform = "translateY(0)";
+      });
+    }
+  });
 }
+
+
+/* close dropdowns when clicking outside any .dropdown */
+document.addEventListener("click", (e) => {
+  const isDropdown = e.target.closest(".dropdown");
+  if (!isDropdown) {
+    closeAllDropdowns();
+  }
+});
+
+/* ================================
+   WATCHLIST (legacy + modal)
+==================================*/
+
+function getLegacyWatchlist() {
+  const raw = localStorage.getItem("watchlist");
+  if (!raw) return [];
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function setLegacyWatchlist(list) {
+  localStorage.setItem("watchlist", JSON.stringify(list));
+}
+
+async function fetchWatchlist() {
+  const legacy = getLegacyWatchlist();
+
+  if (!isLoggedIn()) {
+    return legacy;
+  }
+
+  const user = getUser();
+  const userId = user?.id || user?.user_id;
+  if (!userId) return legacy;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/watchlist/${userId}`);
+    if (!res.ok) {
+      console.warn("Watchlist API error", res.status);
+      return legacy;
+    }
+    const serverList = await res.json();
+    // keep local cache in sync
+    setLegacyWatchlist(serverList);
+    return serverList;
+  } catch (err) {
+    console.warn("Watchlist API unreachable, falling back to local only:", err);
+    return legacy;
+  }
+}
+
 function resolveTconst(movie) {
-  if (movie.tconst) return movie.tconst;
-  const t = SQL_TITLE.find(tt => tt.primaryTitle === movie.title && tt.startYear === movie.year);
-  return t?.tconst || null;
+  return movie && movie.tconst ? movie.tconst : null;
 }
-// Add to legacy + mirror to Lists
-function addToWatchlist(movie) {
-  const list = getLegacyWatchlist();
+
+async function addToWatchlist(movie) {
+  if (!movie) return;
+
   const key = `${movie.title} (${movie.year})`;
-  const exists = list.some(m => (m.tconst && movie.tconst)
-    ? m.tconst === movie.tconst
-    : `${m.title} (${m.year})` === key);
+  const payload = { ...movie, key };
+
+  // ---- Local cache ----
+  const list = getLegacyWatchlist();
+  const exists = list.some((m) =>
+    m.tconst && movie.tconst
+      ? m.tconst === movie.tconst
+      : `${m.title} (${m.year})` === key
+  );
   if (!exists) {
-    list.push(movie);
+    list.push(payload);
     setLegacyWatchlist(list);
   }
-  // Mirror
-  const tconst = resolveTconst(movie);
-  if (tconst) {
-    const doc = getListDoc();
-    if (!doc.items.some(i => i.tconst === tconst)) {
-      doc.items.push({ tconst, added_at: new Date().toISOString(), note: "" });
-      setListDoc(doc);
+
+  // ---- Server (Mongo) ----
+  if (!isLoggedIn()) return;
+
+  const user = getUser();
+  const userId = user?.id || user?.user_id;
+  if (!userId) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/watchlist/${userId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      console.warn("Failed to save watchlist item to server", res.status);
     }
+  } catch (err) {
+    console.warn("Watchlist API unreachable, saved locally only:", err);
   }
 }
-// Remove from legacy + mirror
-function removeFromWatchlistByKeyOrTconst({ key, tconst }) {
+
+async function removeFromWatchlistByKey(key) {
+  if (!key) return;
+
+  // ---- Local cache ----
   let list = getLegacyWatchlist();
-  list = list.filter(m => {
-    const mKey = `${m.title} (${m.year})`;
-    const matchByKey = key ? (mKey === key) : false;
-    const matchByTconst = tconst ? (m.tconst ? m.tconst === tconst : resolveTconst(m) === tconst) : false;
-    return !(matchByKey || matchByTconst);
-  });
+  const item = list.find((m) => `${m.title} (${m.year})` === key);
+  const tconst = item && item.tconst ? item.tconst : null;
+
+  list = list.filter((m) => `${m.title} (${m.year})` !== key);
   setLegacyWatchlist(list);
-  if (tconst) {
-    const doc = getListDoc();
-    doc.items = doc.items.filter(i => i.tconst !== tconst);
-    setListDoc(doc);
+
+  // ---- Server (Mongo) ----
+  if (!isLoggedIn()) return;
+
+  const user = getUser();
+  const userId = user?.id || user?.user_id;
+  if (!userId) return;
+
+  try {
+    await fetch(`${API_BASE}/api/watchlist/${userId}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, tconst }),
+    });
+  } catch (err) {
+    console.warn("Failed to remove watchlist item on server:", err);
   }
 }
-// One-time migration from Lists -> Legacy (keeps your old UX intact)
-function migrateListsToLegacyOnce() {
-  if (localStorage.getItem("__migrated_lists_to_legacy__")) return;
-  const legacy = getLegacyWatchlist();
-  const user_id = getUserId();
-  const allLists = JSON.parse(localStorage.getItem("lists") || "{}");
-  const doc = allLists[user_id];
-  if (doc && Array.isArray(doc.items)) {
-    for (const it of doc.items) {
-      const t = SQL_TITLE.find(tt => tt.tconst === it.tconst);
-      if (!t) continue;
-      const exists = legacy.some(m =>
-        (m.tconst && m.tconst === t.tconst) ||
-        (`${m.title} (${m.year})` === `${t.primaryTitle} (${t.startYear})`)
-      );
-      if (!exists) {
-        legacy.push({
-          tconst: t.tconst,
-          title: t.primaryTitle,
-          year: t.startYear,
-          genres: getGenresForTitle(t.tconst),
-          ratingAvg: (RATING_BY_TCONST.get(t.tconst)?.averageRating ?? null)
-        });
-      }
-    }
-    setLegacyWatchlist(legacy);
+
+async function renderWatchlistModal() {
+  if (!watchlistBody) return;
+
+  watchlistBody.innerHTML = "<p>Loading watchlist...</p>";
+
+  const list = await fetchWatchlist();
+
+  if (!list.length) {
+    watchlistBody.innerHTML = "<p>No items in your watchlist yet.</p>";
+    return;
   }
-  localStorage.setItem("__migrated_lists_to_legacy__", "1");
+
+  watchlistBody.innerHTML = `
+    <ul class="watchlist-list">
+      ${list
+        .map((m) => {
+          const key = `${m.title} (${m.year})`;
+          return `
+            <li>
+              <div class="watchlist-main">
+                <span class="watchlist-title">${escapeHtml(key)}</span>
+                <span class="watchlist-meta">
+                  ${escapeHtml(m.genres || "")}
+                  ${m.rating ? ` • ⭐ ${m.rating.toFixed ? m.rating.toFixed(1) : m.rating}` : ""}
+                </span>
+              </div>
+              <button class="remove-watchlist-btn"
+                      data-key="${escapeHtml(key)}"
+                      aria-label="Remove from watchlist">
+                Remove
+              </button>
+            </li>
+          `;
+        })
+        .join("")}
+    </ul>
+  `;
+}
+
+function openWatchlist() {
+  if (!watchlistModal) return;
+  renderWatchlistModal();
+  watchlistModal.hidden = false;
+  watchlistModal.setAttribute("aria-hidden", "false");
+}
+
+function closeWatchlist() {
+  if (!watchlistModal) return;
+  watchlistModal.hidden = true;
+  watchlistModal.setAttribute("aria-hidden", "true");
+}
+
+if (watchlistClose) watchlistClose.addEventListener("click", closeWatchlist);
+if (watchlistBackdrop)
+  watchlistBackdrop.addEventListener("click", closeWatchlist);
+
+/* one-time migration marker (kept for compatibility) */
+function migrateListsToLegacyOnce() {
+  if (!localStorage.getItem("__migrated_lists_to_legacy__")) {
+    localStorage.setItem("__migrated_lists_to_legacy__", "1");
+  }
+}
+
+if (watchlistBody) {
+  watchlistBody.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".remove-watchlist-btn");
+    if (!btn) return;
+    const key = btn.dataset.key;
+    if (!key) return;
+    await removeFromWatchlistByKey(key);
+    await renderWatchlistModal();
+  });
 }
 
 /* ================================
-   REVIEWS PERSISTENCE (local, per tconst)
+   REVIEWS (localStorage)
 ==================================*/
+
 function getLocalReviews(tconst) {
   const all = JSON.parse(localStorage.getItem("reviews") || "{}");
   return all[tconst] || [];
 }
+
 function setLocalReviews(tconst, arr) {
   const all = JSON.parse(localStorage.getItem("reviews") || "{}");
-  all[tconst] = arr; localStorage.setItem("reviews", JSON.stringify(all));
+  all[tconst] = arr;
+  localStorage.setItem("reviews", JSON.stringify(all));
 }
-function upsertLocalReviewByUser(tconst, userId, review) {
+
+function upsertLocalReview(tconst, review) {
   const arr = getLocalReviews(tconst);
-  const i = arr.findIndex(r => r.user_id === userId);
-  if (i >= 0) arr[i] = review; else arr.push(review);
-  setLocalReviews(tconst, arr);
-}
-function removeLocalReviewByUser(tconst, userId) {
-  const arr = getLocalReviews(tconst).filter(r => r.user_id !== userId);
+  const idx = arr.findIndex((r) => r.user_id === review.user_id);
+  if (idx >= 0) arr[idx] = review;
+  else arr.push(review);
   setLocalReviews(tconst, arr);
 }
 
-/* ================================
-   SEARCH LOGS (NoSQL-shaped)
-==================================*/
-function logSearch({ query = "", filters = {}, results_count = 0 }) {
-  const user_id = getUserId(); // can be 42 for anonymous
-  const logs = JSON.parse(localStorage.getItem("search_logs") || "[]");
-  logs.push({ user_id, query, filters, results_count, ts: new Date().toISOString() });
-  localStorage.setItem("search_logs", JSON.stringify(logs));
+function deleteLocalReviewByUser(tconst, userId) {
+  const arr = getLocalReviews(tconst).filter((r) => r.user_id !== userId);
+  setLocalReviews(tconst, arr);
 }
 
 /* ================================
-   DATA MAPPERS (SQL → UI)
+   SEARCH LOGS
 ==================================*/
-const GENRE_BY_ID = new Map(SQL_GENRE.map(g => [g.genreID, g.genreName]));
-const RATING_BY_TCONST = new Map(SQL_RATING.map(r => [r.tconst, r]));
-function getGenresForTitle(tconst) {
-  return SQL_HAS_GENRE.filter(hg => hg.tconst === tconst).map(hg => GENRE_BY_ID.get(hg.genreID));
-}
-function composeMoviesFromSQL() {
-  return SQL_TITLE.map(t => {
-    const rating = RATING_BY_TCONST.get(t.tconst);
-    const genres = getGenresForTitle(t.tconst);
-    return {
-      tconst: t.tconst,
-      title: t.primaryTitle,
-      year: t.startYear,
-      genres,
-      ratingAvg: rating?.averageRating ?? null,
-      _sql: t, _rating: rating, _akas: SQL_TITLE_AKAS[t.tconst] || [],
-    };
-  });
-}
 
-/* ================================
-   FETCH (front-end fallback only)
-==================================*/
-function fetchData(endpoint, params = {}) {
-  // No backend; just filter local fallback data
-  if (endpoint === "movies") {
-    let data = composeMoviesFromSQL();
-    if (params.genre) {
-      const g = String(params.genre).toLowerCase();
-      data = data.filter(m => (m.genres || []).some(x => x.toLowerCase() === g));
-    }
-    if (params.year_start && params.year_end) {
-      data = data.filter(m => m.year >= params.year_start && m.year <= params.year_end);
-    }
-    if (params.min_rating) {
-      data = data.filter(m => (m.ratingAvg ?? 0) >= Number(params.min_rating));
-    }
-    if (params.q) {
-      const q = params.q.toLowerCase();
-      data = data.filter(m =>
-        m.title.toLowerCase().includes(q) ||
-        (m._sql.originalTitle || "").toLowerCase().includes(q)
-      );
-    }
-    return data;
-  }
-  if (endpoint === "actors") {
-    const profById = new Map(SQL_PROFESSION.map(p => [p.professionID, p.professionName]));
-    const profsByPerson = new Map();
-    SQL_HAS_PROFESSION.forEach(hp => {
-      const arr = profsByPerson.get(hp.nconst) || [];
-      arr.push(profById.get(hp.professionID));
-      profsByPerson.set(hp.nconst, arr);
+async function logSearch(query) {
+  const userId = getUserId();
+  if (!userId) return;         // allow only logged-in users
+  const q = (query || "").trim();
+  if (!q) return;              // don't log empty strings
+
+  try {
+    await fetch(`${API_BASE}/api/search_logs/${userId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ q }),
     });
-    return SQL_PERSON.map(p => ({
-      nconst: p.nconst,
-      primaryName: p.primaryName,
-      birthYear: p.birthYear,
-      deathYear: p.deathYear, // field always present (null if living)
-      professions: profsByPerson.get(p.nconst) || [],
-    }));
+  } catch (err) {
+    console.warn("Search log API unavailable", err);
   }
-  if (endpoint === "genres") return SQL_GENRE.map(g => ({ name: g.genreName, genreID: g.genreID }));
-  return [];
+}
+
+
+/* ================================
+   FETCH HELPERS (backend API)
+==================================*/
+
+const API_BASE = "http://127.0.0.1:5000";
+
+async function fetchData(endpoint, params = {}) {
+  const url = new URL(`/api/${endpoint}`, API_BASE);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      console.error("API error:", res.status, await res.text());
+      return [];
+    }
+    return await res.json();
+  } catch (err) {
+    console.error("Network or parsing error:", err);
+    return [];
+  }
 }
 
 function dedupeByUserKeepLatest(list) {
@@ -361,384 +549,715 @@ function dedupeByUserKeepLatest(list) {
   for (const r of list) {
     const k = r.user_id ?? "_";
     const prev = map.get(k);
-    if (!prev || new Date(r.created_at) > new Date(prev.created_at)) map.set(k, r);
+    if (!prev || new Date(r.created_at) > new Date(prev.created_at)) {
+      map.set(k, r);
+    }
   }
-  return Array.from(map.values()).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
 }
 
 async function fetchReviews(tconst) {
-  // Merge fallback "others" + your local reviews; dedupe by user, keep latest
   const others = FALLBACK_REVIEWS[tconst] || [];
+  let server = [];
+
+  try {
+    const res = await fetch(`${API_BASE}/api/reviews/${encodeURIComponent(tconst)}`);
+    if (res.ok) {
+      server = await res.json();
+    } else {
+      console.warn("Reviews API error", res.status);
+    }
+  } catch (err) {
+    console.warn("Reviews API unreachable, falling back to local only:", err);
+  }
+
   const mine = getLocalReviews(tconst);
-  return dedupeByUserKeepLatest([...others, ...mine]);
+  // Merge precedence: local > server > hard-coded
+  return dedupeByUserKeepLatest([...server, ...others, ...mine]);
 }
 
 /* ================================
-   RENDERERS
+   RENDER HELPERS
 ==================================*/
+
 let currentMovies = [];
-function escapeHtml(text) { const div = document.createElement("div"); div.textContent = text; return div.innerHTML; }
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 function renderMovies(movies) {
   currentMovies = movies;
-  const showAdd = true; // legacy watchlist works without login
-  if (!movies.length) { moviesContainer.innerHTML = "<p>No movies found.</p>"; moviesCount.textContent = "0 result(s)"; return; }
-  moviesContainer.innerHTML = movies.map((m) => {
-    const key = `${m.title} (${m.year})`;
-    const genresStr = Array.isArray(m.genres) ? m.genres.join(", ") : (m.genre || "");
-    const ratingVal = m.rating ?? m.averageRating ?? m.ratingAvg ?? "";
-    const escapedTitle = escapeHtml(m.title);
-    return `
-      <article class="card" data-key="${escapeHtml(key)}" tabindex="0" role="button" aria-label="Open ${escapedTitle}">
-        ${showAdd ? `<button class="add-btn" title="Add to Watchlist" aria-label="Add ${escapedTitle} to Watchlist" data-key="${escapeHtml(key)}">+</button>` : ""}
-        <h2>${escapedTitle}</h2>
-        <p class="meta">${m.year} • ${escapeHtml(genresStr)} • ⭐ ${ratingVal}</p>
-      </article>
-    `;
-  }).join("");
+  if (!movies.length) {
+    moviesContainer.innerHTML = "<p>No movies found.</p>";
+    moviesCount.textContent = "0 result(s)";
+    return;
+  }
+
+  const canWatchlist = isLoggedIn();  // 👈 NEW
+
+  moviesContainer.innerHTML = movies
+    .map((m) => {
+      const key = `${m.title} (${m.year})`;
+      const genresStr = Array.isArray(m.genres)
+        ? m.genres.join(", ")
+        : m.genre || "";
+      const ratingVal = m.rating ?? m.averageRating ?? m.ratingAvg ?? "";
+      const escapedTitle = escapeHtml(m.title);
+
+      const addBtnHtml = canWatchlist
+        ? `
+          <button class="add-btn"
+                  title="Add ${escapedTitle} to Watchlist"
+                  aria-label="Add ${escapedTitle} to Watchlist"
+                  data-key="${escapeHtml(key)}">+</button>
+        `
+        : ""; // no button for guests
+
+      return `
+        <article class="card"
+                 data-key="${escapeHtml(key)}"
+                 tabindex="0"
+                 role="button"
+                 aria-label="Open ${escapedTitle}">
+          ${addBtnHtml}
+          <h2>${escapedTitle}</h2>
+          <p class="meta">
+            ${m.year} • ${escapeHtml(genresStr)} • ⭐ ${ratingVal}
+          </p>
+        </article>
+      `;
+    })
+    .join("");
+
   moviesCount.textContent = `${movies.length} result(s)`;
 }
 
+
 function renderActors(people) {
-  if (!people.length) { actorsContainer.innerHTML = "<p>No people found.</p>"; actorsCount.textContent = "0 result(s)"; return; }
-  actorsContainer.innerHTML = people.map((p) => {
-    const life = (p.deathYear === null || typeof p.deathYear === "undefined") ? `b. ${p.birthYear}` : `${p.birthYear}–${p.deathYear}`;
-    const prof = (p.professions || []).join(", ");
-    return `
-      <article class="card">
-        <h2>${escapeHtml(p.primaryName)}</h2>
-        <p class="meta">${life}${prof ? " • " + escapeHtml(prof) : ""}</p>
-      </article>
-    `;
-  }).join("");
+  if (!people.length) {
+    actorsContainer.innerHTML = "<p>No people found.</p>";
+    actorsCount.textContent = "0 result(s)";
+    return;
+  }
+
+  actorsContainer.innerHTML = people
+    .map((p) => {
+      const life =
+        p.deathYear === null || typeof p.deathYear === "undefined"
+          ? `b. ${p.birthYear}`
+          : `${p.birthYear}–${p.deathYear}`;
+      const prof = (p.professions || []).join(", ");
+      return `
+        <article class="card">
+          <h2>${escapeHtml(p.primaryName)}</h2>
+          <p class="meta">
+            ${life}${prof ? " • " + escapeHtml(prof) : ""}
+          </p>
+        </article>
+      `;
+    })
+    .join("");
+
   actorsCount.textContent = `${people.length} result(s)`;
 }
 
 function renderGenres(genres) {
-  if (!genres.length) { genresContainer.innerHTML = "<p>No genres found.</p>"; genresCount.textContent = "0 result(s)"; return; }
-  genresContainer.innerHTML = genres.map((g) => `
-    <article class="card">
-      <h2>${escapeHtml(g.name)}</h2>
-      <p class="meta">ID: ${g.genreID}</p>
-    </article>
-  `).join("");
+  if (!genres.length) {
+    genresContainer.innerHTML = "<p>No genres found.</p>";
+    genresCount.textContent = "0 result(s)";
+    return;
+  }
+
+    genresContainer.innerHTML = genres
+    .map(
+      (g) => `
+      <article class="card"
+               data-genre="${escapeHtml(g.name)}"
+               tabindex="0"
+               role="button"
+               aria-label="Show standout movies for ${escapeHtml(g.name)}">
+        <h2>${escapeHtml(g.name)}</h2>
+        <p class="meta">ID: ${g.genreID}</p>
+      </article>
+    `
+    )
+    .join("");
+
   genresCount.textContent = `${genres.length} result(s)`;
 }
 
-/* ================================
-   DROPDOWNS (populate + control)
-==================================*/
-function populateDropdowns(movies) {
-  const genres = Array.from(new Set(movies.flatMap(m => Array.isArray(m.genres) ? m.genres : (m.genre ? [m.genre] : [])))).sort();
+function renderTopUserRated(list) {
+  if (!topUserContainer || !topUserCount) return;
 
-  genreMenu.innerHTML = genres.map((g) => `<span role="menuitem" tabindex="0">${escapeHtml(g)}</span>`).join("");
-  genreMenu.querySelectorAll("span").forEach((span) => {
-    span.addEventListener("click", () => { filterMovies({ genre: span.textContent }); closeAllDropdowns(); });
-    span.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); filterMovies({ genre: span.textContent }); closeAllDropdowns(); } });
-  });
-
-  yearMenu.innerHTML = YEAR_RANGES.map((r) => `<span role="menuitem" tabindex="0">${escapeHtml(r.label)}</span>`).join("");
-  yearMenu.querySelectorAll("span").forEach((span, i) => {
-    const range = YEAR_RANGES[i];
-    const handler = () => { filterMovies({ year_start: range.start, year_end: range.end }); closeAllDropdowns(); };
-    span.addEventListener("click", handler);
-    span.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(); } });
-  });
-
-  ratingMenu.innerHTML = [5, 6, 7, 8, 9].map((r) => `<span role="menuitem" tabindex="0">${r}+</span>`).join("");
-  ratingMenu.querySelectorAll("span").forEach((span) => {
-    const val = parseInt(span.textContent);
-    const handler = () => { filterMovies({ min_rating: val }); closeAllDropdowns(); };
-    span.addEventListener("click", handler);
-    span.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(); } });
-  });
-}
-
-function closeAllDropdowns() {
-  document.querySelectorAll(".dropdown-content").forEach((content) => {
-    content.style.opacity = "0"; content.style.transform = "translateY(-5px)";
-    setTimeout(() => (content.style.display = "none"), 150);
-  });
-  document.querySelectorAll(".dropbtn, .profile-btn").forEach((btn) => btn.setAttribute("aria-expanded", "false"));
-}
-
-/* ================================
-   PROFILE MENU (login/logout/watchlist)
-==================================*/
-function populateProfileMenu() {
-  if (!profileMenu) return;
-  const logged = isLoggedIn();
-  profileMenu.innerHTML = "";
-
-  const vw = document.createElement("button");
-  vw.textContent = "View Watchlist";
-  vw.setAttribute("role", "menuitem");
-  vw.addEventListener("click", () => { openWatchlist(); closeAllDropdowns(); });
-  profileMenu.appendChild(vw);
-
-  if (logged) {
-    const lo = document.createElement("button");
-    lo.textContent = "Logout";
-    lo.setAttribute("role", "menuitem");
-    lo.addEventListener("click", () => { localStorage.removeItem("user"); closeAllDropdowns(); loadAll(); });
-    profileMenu.appendChild(lo);
-  } else {
-    const li = document.createElement("button");
-    li.textContent = "Login";
-    li.setAttribute("role", "menuitem");
-    li.addEventListener("click", () => { window.location.href = "login.html"; });
-    profileMenu.appendChild(li);
+  if (!list.length) {
+    topUserContainer.innerHTML = "<p>No user-rated movies yet.</p>";
+    topUserCount.textContent = "0 result(s)";
+    return;
   }
+
+  topUserContainer.innerHTML = list
+    .map((m) => {
+      const key = `${m.title} (${m.year})`;
+      const genresStr = Array.isArray(m.genres)
+        ? m.genres.join(", ")
+        : m.genre || "";
+      const ratingUsers = m.rating_users ?? "";
+      const ratingSystem = m.rating_system ?? "";
+
+      const ratingLine = [
+        ratingUsers ? `User ★ ${ratingUsers}` : "",
+        ratingSystem ? `IMDb ★ ${ratingSystem}` : "",
+      ]
+        .filter(Boolean)
+        .join(" • ");
+
+      const escapedTitle = escapeHtml(m.title);
+
+      return `
+        <article class="card"
+                 data-key="${escapeHtml(key)}"
+                 tabindex="0"
+                 role="button"
+                 aria-label="Open ${escapedTitle}">
+          <h2>${escapedTitle}</h2>
+          <p class="meta">
+            ${m.year} • ${escapeHtml(genresStr)}${
+              ratingLine ? " • " + ratingLine : ""
+            }
+          </p>
+        </article>
+      `;
+    })
+    .join("");
+
+  topUserCount.textContent = `${list.length} result(s)`;
 }
 
 /* ================================
-   WATCHLIST MODAL (legacy list)
+   DROPDOWNS
 ==================================*/
-function openWatchlist() {
-  renderWatchlist();
-  watchlistModal.hidden = false; watchlistModal.setAttribute("aria-hidden", "false");
-  setTimeout(() => watchlistClose?.focus(), 100);
-}
-function closeWatchlist() {
-  watchlistModal.hidden = true; watchlistModal.setAttribute("aria-hidden", "true");
-  profileBtn?.focus();
-}
-function renderWatchlist() {
-  const legacy = getLegacyWatchlist();
-  if (!legacy.length) { watchlistBody.innerHTML = `<p>Your watchlist is empty.</p>`; return; }
 
-  watchlistBody.innerHTML = legacy.map((m) => {
-    const tconst = resolveTconst(m);
-    const rating = tconst ? (RATING_BY_TCONST.get(tconst)?.averageRating ?? "") : (m.ratingAvg ?? m.rating ?? "");
-    const genres = Array.isArray(m.genres) ? m.genres.join(", ")
-                 : (tconst ? getGenresForTitle(tconst).join(", ") : (m.genre || ""));
-    const key = `${m.title} (${m.year})`;
-    return `
-      <div class="watchlist-item" data-key="${escapeHtml(key)}" ${tconst ? `data-tconst="${tconst}"` : ""}>
-        <div>${escapeHtml(m.title)} <span class="meta">• ${m.year} • ${escapeHtml(genres)} • ⭐ ${rating}</span></div>
-        <button class="icon-btn remove-btn" aria-label="Remove ${escapeHtml(key)}">Remove</button>
-      </div>
-    `;
-  }).join("");
+function populateDropdowns(movies) {
+  const genres = Array.from(
+    new Set(
+      movies.flatMap((m) =>
+        Array.isArray(m.genres)
+          ? m.genres
+          : m.genre
+          ? [m.genre]
+          : []
+      )
+    )
+  ).sort();
+
+  genreMenu.innerHTML = genres
+    .map(
+      (g) =>
+        `<span role="menuitem" tabindex="0">${escapeHtml(g)}</span>`
+    )
+    .join("");
+
+  yearMenu.innerHTML = YEAR_RANGES.map(
+    (range) => `
+    <span role="menuitem" tabindex="0"
+          data-start="${range.start}"
+          data-end="${range.end}">
+      ${range.label}
+    </span>
+  `
+  ).join("");
+
+  ratingMenu.innerHTML = `
+    <span role="menuitem" tabindex="0" data-min="9">9+</span>
+    <span role="menuitem" tabindex="0" data-min="8">8+</span>
+    <span role="menuitem" tabindex="0" data-min="7">7+</span>
+    <span role="menuitem" tabindex="0" data-min="0">All</span>
+  `;
 }
+
+function wireDropdownMenu(menu, callback) {
+  if (!menu) return;
+  menu.addEventListener("click", (e) => {
+    const item = e.target.closest("[role='menuitem']");
+    if (!item) return;
+    callback(item);
+  });
+  menu.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const item = e.target.closest("[role='menuitem']");
+    if (!item) return;
+    e.preventDefault();
+    callback(item);
+  });
+}
+
+wireDropdownMenu(genreMenu, (item) => {
+  const genreName = item.textContent.trim();
+  filterMovies({ genre: genreName });
+});
+
+wireDropdownMenu(yearMenu, (item) => {
+  const start = Number(item.dataset.start);
+  const end = Number(item.dataset.end);
+  filterMovies({ year_start: start, year_end: end });
+});
+
+wireDropdownMenu(ratingMenu, (item) => {
+  const min = Number(item.dataset.min);
+  filterMovies({ min_rating: min });
+});
+
+/* click-to-open for Genre / Year / Rating dropdowns */
+document.querySelectorAll(".dropbtn").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const dropdown = btn.nextElementSibling;
+    if (!dropdown || !dropdown.classList.contains("dropdown-content")) return;
+
+    const isOpen = dropdown.style.display === "block";
+
+    if (isOpen) {
+      // clicking again closes it
+      closeAllDropdowns();
+    } else {
+      // close others, then open this one
+      closeAllDropdowns(dropdown);
+      btn.setAttribute("aria-expanded", "true");
+      dropdown.style.display = "block";
+      requestAnimationFrame(() => {
+        dropdown.style.opacity = "1";
+        dropdown.style.transform = "translateY(0)";
+      });
+    }
+  });
+});
+
+
+/* prevent clicks inside dropdown menus from bubbling up and closing them */
+document.querySelectorAll(".dropdown-content").forEach((menu) => {
+  menu.addEventListener("click", (e) => e.stopPropagation());
+  menu.addEventListener("keydown", (e) => e.stopPropagation());
+});
 
 /* ================================
    MOVIE MODAL + REVIEWS
 ==================================*/
+
 function openMovieModal() {
-  movieModal.hidden = false; movieModal.setAttribute("aria-hidden", "false");
+  movieModal.hidden = false;
+  movieModal.setAttribute("aria-hidden", "false");
   setTimeout(() => movieClose?.focus(), 50);
 }
+
 function closeMovieModal() {
-  movieModal.hidden = true; movieModal.setAttribute("aria-hidden", "true");
-  homeLogo?.focus();
+  movieModal.hidden = true;
+  movieModal.setAttribute("aria-hidden", "true");
 }
+
+if (movieClose) movieClose.addEventListener("click", closeMovieModal);
+if (movieBackdrop)
+  movieBackdrop.addEventListener("click", closeMovieModal);
 
 function renderReviews(list) {
   const logged = isLoggedIn();
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = getUser();
   const myId = user?.id || user?.user_id;
 
-  if (!list.length) { reviewsList.innerHTML = `<p>No reviews yet.</p>`; return; }
+  if (!list.length) {
+    reviewsList.innerHTML = "<p>No reviews yet.</p>";
+  } else {
+    reviewsList.innerHTML = list
+      .map((r) => {
+        const ts = new Date(r.created_at).toLocaleString();
+        const owner = r.user_id === myId;
+        const displayName = r.username || r.display_name || `User ${r.user_id}`;
+        const spoilerClass = r.spoiler ? "spoiler-review" : "";
+        const spoilerLabel = r.spoiler
+          ? `<span class="pill pill-spoiler">Spoiler</span>`
+          : "";
+        const stars =
+          "★".repeat(r.stars) + "☆".repeat(10 - r.stars);
+        const tags = (r.tags || [])
+          .map(
+            (t) =>
+              `<span class="pill pill-tag">${escapeHtml(
+                t
+              )}</span>`
+          )
+          .join(" ");
+        const ownerActions = owner
+          ? `
+              <button class="review-edit-btn" data-user="${r.user_id}">Edit</button>
+              <button class="review-delete-btn" data-user="${r.user_id}">Delete</button>
+            `
+          : "";
+        return `
+          <article class="review ${spoilerClass}">
+            <header>
+              <span class="review-user">${escapeHtml(displayName)}</span>
+              <span class="review-stars">${stars}</span>
+              ${spoilerLabel}
+              <time datetime="${r.created_at}">${ts}</time>
+            </header>
+            <p>${escapeHtml(r.text)}</p>
+            <footer>
+              ${tags}
+              ${ownerActions}
+            </footer>
+          </article>
+        `;
+      })
+      .join("");
+  }
 
-  reviewsList.innerHTML = list.map(r => {
-    const ts = new Date(r.created_at).toLocaleString();
-    const tagText = r.tags && r.tags.length ? ` • <span class="tags">#${r.tags.join(" #")}</span>` : "";
-    const spoiler = r.spoiler ? `<span class="spoiler" title="Contains spoilers">spoiler</span>` : "";
-    const isMine = logged && myId === r.user_id;
-    const you = isMine ? `<span class="you-badge">You</span>` : "";
-    const actions = isMine
-      ? `<div class="actions">
-           <button class="icon-btn edit-btn" data-user="${r.user_id}">Edit</button>
-           <button class="icon-btn danger delete-btn" data-user="${r.user_id}">Delete</button>
-         </div>`
-      : "";
-    return `
-      <article class="review">
-        <div class="review-head">
-          <div class="left">
-            <span class="author">User ${r.user_id ?? "?"}</span>${you}
-          </div>
-          <span class="stars">⭐ ${r.stars}</span>
-        </div>
-        <div class="desc">${escapeHtml(r.text)}</div>
-        <div class="meta" style="margin-top:.35rem;">${ts}${tagText} ${spoiler}</div>
-        ${actions}
-      </article>
-    `;
-  }).join("");
+  if (!logged) {
+    reviewText.disabled = true;
+    reviewTags.disabled = true;
+    spoilerCheckbox.disabled = true;
+    starHint.textContent = "Login to rate & review";
+    if (starContainer) {
+      starContainer
+        .querySelectorAll(".star")
+        .forEach((s) => (s.disabled = true));
+    }
+  } else {
+    reviewText.disabled = false;
+    reviewTags.disabled = false;
+    spoilerCheckbox.disabled = false;
+    if (starContainer) {
+      starContainer
+        .querySelectorAll(".star")
+        .forEach((s) => (s.disabled = false));
+    }
+  }
 }
 
-// star rating widget
-let selectedStars = 0;
-function paintStars(n) {
-  selectedStars = n;
-  if (!starRating) return;
-  const buttons = starRating.querySelectorAll(".star");
-  buttons.forEach(btn => {
-    const val = Number(btn.dataset.value);
-    const filled = val <= n;
-    btn.classList.toggle("filled", filled);
-    btn.setAttribute("aria-checked", filled && val === n ? "true" : "false");
-    btn.textContent = filled ? "★" : "☆";
-  });
-  starHint.textContent = n ? `${n}/10` : "";
-}
 function wireStarEvents() {
-  if (!starRating) return;
-  const buttons = starRating.querySelectorAll(".star");
-  let hoverTemp = 0;
-  buttons.forEach(btn => {
-    btn.addEventListener("click", () => { paintStars(Number(btn.dataset.value)); });
-    btn.addEventListener("mouseenter", () => { hoverTemp = selectedStars; paintStars(Number(btn.dataset.value)); });
-    btn.addEventListener("mouseleave", () => { paintStars(hoverTemp || selectedStars); });
-    btn.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); paintStars(Number(btn.dataset.value)); }
-      if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); paintStars(Math.max(0, selectedStars - 1)); }
-      if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); paintStars(Math.min(10, selectedStars + 1)); }
+  if (!starContainer) return;
+  const stars = Array.from(
+    starContainer.querySelectorAll(".star")
+  );
+
+  stars.forEach((star) => {
+    star.addEventListener("click", () => {
+      const value = Number(star.dataset.value);
+      starContainer.setAttribute("data-value", String(value));
+      stars.forEach((s) => {
+        const sVal = Number(s.dataset.value);
+        const active = sVal <= value;
+        s.textContent = active ? "★" : "☆";
+        s.setAttribute("aria-checked", active ? "true" : "false");
+      });
+      starHint.textContent = `You rated: ${value}/10`;
     });
   });
 }
 
 async function renderMovieDetail(movie) {
   try {
+    const tconst =
+      movie.tconst || `${movie.title} (${movie.year})`;
     movieTitle.textContent = movie.title;
 
     const genresStr = Array.isArray(movie.genres)
       ? movie.genres.join(", ")
-      : (movie.genre || "");
-    const ratingVal = movie.rating ?? movie.averageRating ?? movie.ratingAvg ?? "";
-    movieMeta.textContent = `${movie.year} • ${genresStr} • ⭐ ${ratingVal}`;
+      : movie.genre || "";
+    const ratingVal =
+      movie.ratingAvg ?? movie.rating ?? movie.averageRating ?? "";
 
-    // Open the modal early so the user sees something while reviews load
+    const metaBits = [
+      movie.year || "",
+      genresStr,
+      ratingVal ? `⭐ ${ratingVal}` : ""
+    ].filter(Boolean);
+
+    movieMeta.textContent = metaBits.join(" • ");
+
     openMovieModal();
 
-    const tconst = movie.tconst || `${movie.title} (${movie.year})`;
-
-    // Load & render reviews
     const list = await fetchReviews(tconst);
     renderReviews(list);
-
-    // Prepare star widget + prefilling if user already reviewed
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    const myId = user?.id || user?.user_id || 42;
-
     wireStarEvents();
 
-    const myExisting = list.find(r => r.user_id === myId);
-    paintStars(myExisting ? Number(myExisting.stars) : 0);
+    const user = getUser();
+    const myId = user?.id || user?.user_id || 42;
+    const displayName =
+      user?.display_name ||
+      user?.username ||
+      (user?.email ? user.email.split("@")[0] : null) ||
+      `User ${myId}`;
+    const myExisting = list.find((r) => r.user_id === myId);
+
+    // pre-fill if exists
     if (myExisting) {
-      starHint.textContent = `${Number(myExisting.stars)}/10 • You already reviewed this (edit or delete below).`;
+      reviewText.value = myExisting.text || "";
+      spoilerCheckbox.checked = !!myExisting.spoiler;
+      reviewTags.value = (myExisting.tags || []).join(", ");
+      const stars = myExisting.stars || 0;
+      starContainer.setAttribute("data-value", String(stars));
+      const starsEls = Array.from(
+        starContainer.querySelectorAll(".star")
+      );
+      starsEls.forEach((s) => {
+        const v = Number(s.dataset.value);
+        const active = v <= stars;
+        s.textContent = active ? "★" : "☆";
+        s.setAttribute("aria-checked", active ? "true" : "false");
+      });
+      starHint.textContent = `You rated: ${stars}/10`;
+    } else {
+      reviewText.value = "";
+      spoilerCheckbox.checked = false;
+      reviewTags.value = "";
+      starContainer.setAttribute("data-value", "0");
+      Array.from(starContainer.querySelectorAll(".star")).forEach(
+        (s) => {
+          s.textContent = "☆";
+          s.setAttribute("aria-checked", "false");
+        }
+      );
+      starHint.textContent = "Click a star to rate";
     }
 
-    // Review list actions
-    reviewsList.onclick = (e) => {
-      const del = e.target.closest(".delete-btn");
-      if (del) {
-        if (!confirm("Delete your review?")) return;
-        removeLocalReviewByUser(tconst, myId);
-        fetchReviews(tconst).then(renderReviews);
-        reviewText.value = ""; reviewTags.value = ""; reviewSpoiler.checked = false; paintStars(0);
-        return;
-      }
-      const edit = e.target.closest(".edit-btn");
-      if (edit) {
-        const mine = getLocalReviews(tconst).find(r => r.user_id === myId) || myExisting;
-        if (!mine) return;
-        paintStars(Number(mine.stars));
-        reviewText.value = mine.text || "";
-        reviewTags.value = (mine.tags || []).join(", ");
-        reviewSpoiler.checked = !!mine.spoiler;
+    // submit handler
+    if (reviewForm) {
+      reviewForm.onsubmit = async (e) => {
+        e.preventDefault();
+        reviewError.textContent = "";
+
+        if (!isLoggedIn()) {
+          alert("Please log in to submit a review.");
+          return;
+        }
+
+        const starsVal = Number(
+          starContainer.getAttribute("data-value") || "0"
+        );
+        if (!starsVal || starsVal < 1) {
+          reviewError.textContent =
+            "Please choose a rating (1–10 stars).";
+          return;
+        }
+
+        const text = reviewText.value.trim();
+        if (!text) {
+          reviewError.textContent = "Review text cannot be empty.";
+          return;
+        }
+
+        const tags = reviewTags.value
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
+        const spoiler = spoilerCheckbox.checked;
+        const now = new Date().toISOString();
+
+        const review = {
+          user_id: myId,
+          username: displayName,
+          stars: starsVal,
+          text,
+          spoiler,
+          tags,
+          created_at: now
+        };
+
+        const existing = await fetchReviews(tconst);
+        const already = existing.find((r) => r.user_id === myId);
+        if (already) {
+          const overwrite = confirm(
+            "You already have a review. Overwrite it?"
+          );
+          if (!overwrite) return;
+        }
+
+        try {
+          const res = await fetch(
+            `${API_BASE}/api/reviews/${encodeURIComponent(tconst)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(review),
+            }
+          );
+          if (!res.ok) {
+            console.warn("Failed to save review to server", res.status);
+          }
+        } catch (err) {
+          console.warn("Reviews API unreachable, saving locally only:", err);
+        }
+
+        upsertLocalReview(tconst, review);
+
+        const updated = await fetchReviews(tconst);
+        renderReviews(updated);
+        alert("Review saved.");
+      };
+    }
+
+    // edit / delete inline
+    reviewsList.onclick = async (e) => {
+      const userObj = getUser();
+      const myId2 = userObj?.id || userObj?.user_id || 42;
+
+      const delBtn = e.target.closest(".review-delete-btn");
+      const editBtn = e.target.closest(".review-edit-btn");
+
+      if (!delBtn && !editBtn) return;
+
+      if (delBtn) {
+        const uid = Number(delBtn.dataset.user);
+        if (uid !== myId2) {
+          alert("You can only delete your own review.");
+          return;
+        }
+        const ok = confirm("Delete your review?");
+        if (!ok) return;
+        try {
+          await fetch(
+            `${API_BASE}/api/reviews/${encodeURIComponent(tconst)}/${myId2}`,
+            { method: "DELETE" }
+          );
+        } catch (err) {
+          console.warn("Failed to delete review on server:", err);
+        }
+
+        deleteLocalReviewByUser(tconst, myId2);
+
+        const updated = await fetchReviews(tconst);
+        renderReviews(updated);
+      } else if (editBtn) {
+        const uid = Number(editBtn.dataset.user);
+        if (uid !== myId2) {
+          alert("You can only edit your own review.");
+          return;
+        }
+        const existing = (await fetchReviews(tconst)).find(
+          (r) => r.user_id === myId2
+        );
+        if (!existing) return;
+
+        reviewText.value = existing.text || "";
+        spoilerCheckbox.checked = !!existing.spoiler;
+        reviewTags.value = (existing.tags || []).join(", ");
+        const stars = existing.stars || 0;
+        starContainer.setAttribute("data-value", String(stars));
+        const starsEls = Array.from(
+          starContainer.querySelectorAll(".star")
+        );
+        starsEls.forEach((s) => {
+          const v = Number(s.dataset.value);
+          const active = v <= stars;
+          s.textContent = active ? "★" : "☆";
+          s.setAttribute(
+            "aria-checked",
+            active ? "true" : "false"
+          );
+        });
+        starHint.textContent = `You rated: ${stars}/10`;
         reviewText.focus();
       }
     };
-
-    // Submit handler
-    reviewForm.onsubmit = (e) => {
-      e.preventDefault();
-      reviewError.textContent = "";
-
-      if (!selectedStars || selectedStars < 1) { reviewError.textContent = "Pick a star rating (1–10)."; return; }
-
-      const textVal = reviewText.value.trim();
-      const tagsVal = reviewTags.value.trim();
-      if (!textVal) { reviewError.textContent = "Write a short review."; return; }
-
-      const already = !!getLocalReviews(tconst).find(r => r.user_id === myId);
-      if (already && !confirm("You already posted a review for this title. Overwrite it?")) return;
-
-      const review = {
-        user_id: myId,
-        stars: selectedStars,
-        text: textVal,
-        tags: tagsVal ? tagsVal.split(",").map(s => s.trim()).filter(Boolean) : [],
-        spoiler: !!reviewSpoiler.checked,
-        created_at: new Date().toISOString(),
-      };
-
-      upsertLocalReviewByUser(tconst, myId, review);
-      fetchReviews(tconst).then(renderReviews);
-      reviewText.value = ""; reviewTags.value = ""; reviewSpoiler.checked = false;
-      starHint.textContent = `${selectedStars}/10 • Review saved.`;
-    };
-
   } catch (err) {
-    console.error("Failed to render movie details:", err);
-    movieMeta.textContent = "Failed to load details. Try again.";
-    reviewsList.innerHTML = `<p class="error-msg">Could not load reviews.</p>`;
-    openMovieModal(); // ensure modal still opens on error
+    console.error("Error rendering movie modal:", err);
   }
 }
 
 /* ================================
-   FILTERING / SEARCH / LOAD
+   FILTER / LOAD
 ==================================*/
-function filterMovies(params) {
+
+async function filterMovies(params) {
   try {
-    const data = fetchData("movies", params);
+    const data = await fetchData("movies", params);
     renderMovies(data);
-    // Search logs (NoSQL shape)
-    logSearch({
-      query: params.q || "",
-      filters: {
-        min_rating: params.min_rating ?? null,
-        year_start: params.year_start ?? null,
-        year_end: params.year_end ?? null,
-        genres: params.genre ? [params.genre] : []
-      },
-      results_count: data.length
-    });
   } catch (err) {
     console.error("Error filtering movies:", err);
-    moviesContainer.innerHTML = "<p>Error loading movies. Please try again.</p>";
+    moviesContainer.innerHTML =
+      "<p>Error loading movies. Please try again.</p>";
   }
 }
 
-function loadAll() {
-  populateProfileMenu();
+async function filterAboveGenreAvg(genreName) {
   try {
-    const movies = fetchData("movies");
-    const people = fetchData("actors");
-    const genres = fetchData("genres");
+    const payload = await fetchData("movies/above_genre_avg", {
+      genre: genreName,
+      min_votes: 50,
+    });
+
+    const data = payload.movies || [];
+    const genreAvg = payload.genreAvg;
+
+    renderMovies(data);
+
+    if (moviesCount) {
+      let text = `${data.length} standout result(s) for "${genreName}"`;
+      if (typeof genreAvg === "number") {
+        text += ` (above genre average: ${genreAvg.toFixed(2)})`;
+      } else {
+        text += ` (above genre average)`;
+      }
+      moviesCount.textContent = text;
+    }
+  } catch (err) {
+    console.error("Error loading standout movies:", err);
+    moviesContainer.innerHTML =
+      "<p>Error loading standout movies. Please try again.</p>";
+  }
+}
+
+async function loadAll() {
+  populateProfileMenu();
+
+  try {
+    const [movies, people, genres, topUser] = await Promise.all([
+      fetchData("movies"),
+      fetchData("actors"),
+      fetchData("genres"),
+      fetchData("top_user_rated", { limit: 10, min_reviews: 2 }),
+    ]);
 
     renderMovies(movies);
     populateDropdowns(movies);
     renderActors(people);
     renderGenres(genres);
+    renderTopUserRated(topUser);
   } catch (err) {
     console.error("Error loading data:", err);
   }
 }
 
+
 /* ================================
-   EVENTS
+   GLOBAL EVENTS
 ==================================*/
+
+function hasActiveFilters(p) {
+  return !!(
+    p.genre ||
+    p.min_rating ||
+    p.year_start ||
+    p.year_end
+  );
+}
+
 if (searchInput) {
-  let searchTimeout;
   searchInput.addEventListener("input", () => {
-    clearTimeout(searchTimeout);
     const q = searchInput.value.trim();
-    searchTimeout = setTimeout(() => { q ? filterMovies({ q }) : loadAll(); }, 300);
+
+    // still send full params to backend if you want
+    filterMovies({ q });
+
+    clearTimeout(searchLogTimeout);
+    searchLogTimeout = setTimeout(() => {
+      if (q.length < 2) return;  // ignore 1-letter noise
+      logSearch(q);
+    }, 600); // user paused typing
   });
 }
 
@@ -755,19 +1274,33 @@ if (moviesContainer) {
     const addBtn = e.target.closest(".add-btn");
     if (addBtn) {
       const key = addBtn.dataset.key;
-      const movie = currentMovies.find((m) => `${m.title} (${m.year})` === key);
+      const movie = currentMovies.find(
+        (m) => `${m.title} (${m.year})` === key
+      );
       if (movie) {
         addToWatchlist(movie);
         addBtn.textContent = "✓";
-        addBtn.setAttribute("aria-label", `${movie.title} added to watchlist`);
-        setTimeout(() => { addBtn.textContent = "+"; addBtn.setAttribute("aria-label", `Add ${movie.title} to Watchlist`); }, 900);
+        addBtn.setAttribute(
+          "aria-label",
+          `${movie.title} added to watchlist`
+        );
+        setTimeout(() => {
+          addBtn.textContent = "+";
+          addBtn.setAttribute(
+            "aria-label",
+            `Add ${movie.title} to Watchlist`
+          );
+        }, 900);
       }
       return;
     }
+
     const card = e.target.closest(".card");
     if (card) {
       const key = card.dataset.key;
-      const movie = currentMovies.find((m) => `${m.title} (${m.year})` === key);
+      const movie = currentMovies.find(
+        (m) => `${m.title} (${m.year})` === key
+      );
       if (movie) await renderMovieDetail(movie);
     }
   });
@@ -778,99 +1311,205 @@ if (moviesContainer) {
     if (!card) return;
     e.preventDefault();
     const key = card.dataset.key;
-    const movie = currentMovies.find((m) => `${m.title} (${m.year})` === key);
+    const movie = currentMovies.find(
+      (m) => `${m.title} (${m.year})` === key
+    );
     if (movie) await renderMovieDetail(movie);
   });
 }
 
-// Watchlist modal
-if (watchlistBackdrop) watchlistBackdrop.addEventListener("click", closeWatchlist);
-if (watchlistClose) watchlistClose.addEventListener("click", closeWatchlist);
+if (genresContainer) {
+  // Click with mouse
+  genresContainer.addEventListener("click", (e) => {
+    const card = e.target.closest(".card");
+    if (!card) return;
+    const genreName = card.dataset.genre;
+    if (!genreName) return;
 
-// Movie modal
-if (movieBackdrop) movieBackdrop.addEventListener("click", closeMovieModal);
-if (movieClose) movieClose.addEventListener("click", closeMovieModal);
+    filterAboveGenreAvg(genreName);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
 
-// Escape to close modals
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    if (watchlistModal && !watchlistModal.hidden) closeWatchlist();
-    if (movieModal && !movieModal.hidden) closeMovieModal();
-  }
-});
+  // Keyboard (Enter / Space)
+  genresContainer.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const card = e.target.closest(".card");
+    if (!card) return;
+    e.preventDefault();
+    const genreName = card.dataset.genre;
+    if (!genreName) return;
 
-// Watchlist remove (by key or tconst)
-if (watchlistBody) {
-  watchlistBody.addEventListener("click", (e) => {
-    const btn = e.target.closest(".remove-btn");
-    if (!btn) return;
-    const row = btn.closest(".watchlist-item");
-    const tconst = row?.dataset.tconst;
-    const key = row?.dataset.key;
-    removeFromWatchlistByKeyOrTconst({ key, tconst });
-    renderWatchlist();
+    filterAboveGenreAvg(genreName);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   });
 }
 
 /* ================================
-   NAVBAR DROPDOWNS (hover + touch + keyboard)
+   SEARCH HISTORY MODAL
 ==================================*/
-document.querySelectorAll(".dropdown").forEach((dropdown) => {
-  if (dropdown.dataset.dropdownWired === "1") return;
-  dropdown.dataset.dropdownWired = "1";
 
-  const content = dropdown.querySelector(".dropdown-content");
-  const btn = dropdown.querySelector(".dropbtn, .profile-btn");
-  if (!content || !btn) return;
+function formatSearchTime(ts) {
+  if (!ts) return "";
+  try {
+    return new Date(ts).toLocaleString();
+  } catch {
+    return ts;
+  }
+}
 
-  let timeoutId;
-  dropdown.addEventListener("mouseenter", () => {
-    clearTimeout(timeoutId);
-    content.style.display = "block";
-    btn.setAttribute("aria-expanded", "true");
-    requestAnimationFrame(() => { content.style.opacity = "1"; content.style.transform = "translateY(0)"; });
-  });
-  dropdown.addEventListener("mouseleave", () => {
-    timeoutId = setTimeout(() => {
-      content.style.opacity = "0"; content.style.transform = "translateY(-5px)";
-      btn.setAttribute("aria-expanded", "false");
-      setTimeout(() => (content.style.display = "none"), 150);
-    }, 150);
-  });
+async function renderSearchLogModal() {
+  if (!searchLogBody) return;
 
-  btn.addEventListener("click", (e) => {
-    e.preventDefault();
-    const isOpen = content.style.display === "block";
-    document.querySelectorAll(".dropdown .dropdown-content").forEach((c) => { c.style.opacity = "0"; c.style.transform = "translateY(-5px)"; setTimeout(() => (c.style.display = "none"), 150); });
-    document.querySelectorAll(".dropbtn, .profile-btn").forEach((b) => b.setAttribute("aria-expanded", "false"));
-    if (!isOpen) {
-      content.style.display = "block";
-      btn.setAttribute("aria-expanded", "true");
-      requestAnimationFrame(() => { content.style.opacity = "1"; content.style.transform = "translateY(0)"; });
+  const user = getUser();
+  if (!user) {
+    searchLogBody.innerHTML = "<p>Please log in to see your search history.</p>";
+    return;
+  }
+
+  const userId = user.id || user.user_id;
+  if (!userId) {
+    searchLogBody.innerHTML = "<p>Unable to determine user id.</p>";
+    return;
+  }
+
+  searchLogBody.innerHTML = "<p>Loading search history…</p>";
+
+  try {
+    const [userRes, trendingRes] = await Promise.all([
+      fetch(`${API_BASE}/api/search_logs/${encodeURIComponent(userId)}`),
+      fetch(`${API_BASE}/api/search_trending`),
+    ]);
+
+    let userData = [];
+    let trendingData = [];
+
+    if (userRes.ok) {
+      userData = (await userRes.json().catch(() => [])) || [];
     }
-  });
-
-  btn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.click(); } });
-  content.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      content.style.opacity = "0";
-      content.style.transform = "translateY(-5px)";
-      btn.setAttribute("aria-expanded", "false");
-      setTimeout(() => (content.style.display = "none"), 150);
-      btn.focus();
+    if (trendingRes.ok) {
+      trendingData = (await trendingRes.json().catch(() => [])) || [];
     }
-  });
-});
 
-document.addEventListener("click", (e) => {
-  const isDropdown = e.target.closest(".dropdown");
-  if (isDropdown) return;
-  document.querySelectorAll(".dropdown .dropdown-content").forEach((c) => { c.style.opacity = "0"; c.style.transform = "translateY(-5px)"; setTimeout(() => (c.style.display = "none"), 150); });
-  document.querySelectorAll(".dropbtn, .profile-btn").forEach((b) => b.setAttribute("aria-expanded", "false"));
-});
+    if (!userRes.ok && !trendingRes.ok) {
+      searchLogBody.innerHTML =
+        "<p>Error loading search history. Please try again.</p>";
+      return;
+    }
+
+    if (!Array.isArray(userData)) userData = [];
+    if (!Array.isArray(trendingData)) trendingData = [];
+
+    // Newest first for personal history
+    userData.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+    const sections = [];
+
+    // --- Your search history ---
+    if (userData.length) {
+      sections.push(`
+        <h3>Your recent searches</h3>
+        <table class="user-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Query</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${userData
+              .map(
+                (log) => `
+              <tr>
+                <td>${formatSearchTime(log.ts)}</td>
+                <td>${escapeHtml(log.q || "")}</td>
+              </tr>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      `);
+    } else {
+      sections.push("<p>No searches logged for your account yet.</p>");
+    }
+
+    // --- Trending searches (last N days via TTL) ---
+    if (trendingData.length) {
+      sections.push(`
+        <h3 style="margin-top:1rem;">Trending searches (last 7 days)</h3>
+        <table class="user-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Query</th>
+              <th>Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${trendingData
+              .map(
+                (row, idx) => `
+              <tr>
+                <td>${idx + 1}</td>
+                <td>${escapeHtml(row.q || "")}</td>
+                <td>${row.count ?? 0}</td>
+              </tr>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      `);
+    }
+
+    searchLogBody.innerHTML =
+      sections.join("") || "<p>No searches logged yet.</p>";
+  } catch (err) {
+    console.error("Error loading search logs:", err);
+    searchLogBody.innerHTML =
+      "<p>Server unavailable. Please try again later.</p>";
+  }
+}
+
+function openSearchLogModal() {
+  if (!searchLogModal) return;
+  renderSearchLogModal();
+  searchLogModal.hidden = false;
+  searchLogBackdrop.hidden = false;
+  searchLogModal.setAttribute("aria-hidden", "false");
+}
+
+function closeSearchLogModal() {
+  if (!searchLogModal) return;
+  searchLogModal.hidden = true;
+  searchLogBackdrop.hidden = true;
+  searchLogModal.setAttribute("aria-hidden", "true");
+}
+
+/* close via X and backdrop */
+if (searchLogClose) {
+  searchLogClose.addEventListener("click", closeSearchLogModal);
+}
+if (searchLogBackdrop) {
+  searchLogBackdrop.addEventListener("click", closeSearchLogModal);
+}
+
+/* button next to search bar */
+if (searchHistoryBtn) {
+  searchHistoryBtn.addEventListener("click", () => {
+    if (!isLoggedIn()) {
+      window.location.href = "login.html";
+      return;
+    }
+    openSearchLogModal();
+  });
+}
 
 /* ================================
    BOOT
 ==================================*/
+
 migrateListsToLegacyOnce();
 loadAll();
+
+

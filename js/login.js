@@ -7,6 +7,7 @@ const errorMsg = document.getElementById("error-msg");
 
 // If already logged in, redirect to app
 if (localStorage.getItem("user")) {
+  // if login.html is in a subfolder, go back up one level
   window.location.href = "index.html";
 }
 
@@ -32,41 +33,51 @@ form.addEventListener("submit", async (e) => {
     const res = await fetch(`${API_BASE}/api/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // auth.py expects either "email" or "username"; sending email is fine
       body: JSON.stringify({ email, password }),
     });
 
+    const data = await res.json().catch(() => ({}));
+
     if (!res.ok) {
-      throw new Error("Network error");
-    }
-
-    const data = await res.json();
-
-    if (data.success) {
-      // Store user data (Note: In production, use secure session tokens)
-      localStorage.setItem("user", JSON.stringify(data.user));
-      
-      // Small delay to ensure storage is set before redirect
-      setTimeout(() => {
-        window.location.href = "index.html";
-      }, 100);
-    } else {
-      errorMsg.textContent = data.message || "Invalid credentials.";
+      // Backend returned an auth / validation error
+      errorMsg.textContent =
+        data.error || data.message || "Invalid credentials.";
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
+      return;
     }
+
+    // ✅ auth.py returns the user object directly
+    const user = data;
+
+    // Store user data (Note: In production, use secure session tokens)
+    localStorage.setItem("user", JSON.stringify(user));
+
+    // Small delay to ensure storage is set before redirect
+    setTimeout(() => {
+      window.location.href = "index.html";
+    }, 100);
   } catch (err) {
-    console.warn("Server unavailable, using fallback authentication:", err.message);
-    
-    // Fallback for front-end testing only
+    console.warn(
+      "Server unreachable, falling back to demo auth (dev only):",
+      err.message
+    );
+
+    // Fallback for front-end testing only (when Flask isn't running)
     // WARNING: This is NOT secure and should only be used for development
     if (email === "demo@example.com" && password === "1234") {
-      localStorage.setItem("user", JSON.stringify({ email, name: "Demo User" }));
-      
+      localStorage.setItem(
+        "user",
+        JSON.stringify({ email, name: "Demo User" })
+      );
+
       setTimeout(() => {
         window.location.href = "index.html";
       }, 100);
     } else {
-      errorMsg.textContent = "Server unavailable or invalid credentials.";
+      errorMsg.textContent =
+        "Server unavailable or invalid credentials.";
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
     }

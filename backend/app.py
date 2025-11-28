@@ -99,6 +99,94 @@ def get_movies():
         })
     return jsonify(movies)
 
+@app.route("/api/movies/above_genre_avg", methods=["GET"])
+def get_movies_above_genre_average():
+    """
+    Query params:
+      genre      - genreName (required, case-insensitive)
+      min_votes  - optional, minimum numVotes to filter tiny/noisy titles (default 50)
+
+    Returns:
+      {
+        "genre": "Biography",
+        "genreAvg": 5.73,
+        "count": 6,
+        "movies": [ ... ]
+      }
+    """
+    genre = (request.args.get("genre") or "").strip()
+    min_votes = request.args.get("min_votes", type=int, default=50)
+
+    if not genre:
+        return jsonify({"error": "genre is required"}), 400
+
+    sql = """
+    SELECT
+      t.tconst,
+      t.primaryTitle,
+      t.originalTitle,
+      t.startYear,
+      t.averageRating,
+      t.numVotes,
+      GROUP_CONCAT(DISTINCT g.genreName ORDER BY g.genreName) AS genres
+    FROM Title t
+    JOIN HasGenre hg  ON hg.tconst = t.tconst
+    JOIN Genre    g   ON g.genreID = hg.genreID
+    WHERE LOWER(g.genreName) = %s
+      AND t.averageRating IS NOT NULL
+      AND t.numVotes >= %s
+      AND t.averageRating >= (
+          SELECT AVG(t2.averageRating)
+          FROM Title t2
+          JOIN HasGenre hg2 ON hg2.tconst = t2.tconst
+          JOIN Genre    g2  ON g2.genreID = hg2.genreID
+          WHERE LOWER(g2.genreName) = %s
+            AND t2.averageRating IS NOT NULL
+            AND t2.numVotes >= %s
+      )
+    GROUP BY t.tconst, t.primaryTitle, t.originalTitle,
+             t.startYear, t.averageRating, t.numVotes
+    ORDER BY t.averageRating DESC, t.numVotes DESC
+    LIMIT 200
+    """
+
+    rows = query_all(sql, [genre.lower(), min_votes, genre.lower(), min_votes])
+
+    movies = []
+    for r in rows:
+        genres_list = r["genres"].split(",") if r["genres"] else []
+        movies.append({
+            "tconst": r["tconst"],
+            "title": r["primaryTitle"],
+            "originalTitle": r["originalTitle"],
+            "year": r["startYear"],
+            "genres": genres_list,
+            "ratingAvg": r["averageRating"],
+            "numVotes": r["numVotes"],
+        })
+
+    avg_sql = """
+    SELECT AVG(t2.averageRating) AS genreAvg
+    FROM Title t2
+    JOIN HasGenre hg2 ON hg2.tconst = t2.tconst
+    JOIN Genre    g2  ON g2.genreID = hg2.genreID
+    WHERE LOWER(g2.genreName) = %s
+      AND t2.averageRating IS NOT NULL
+      AND t2.numVotes >= %s
+    """
+    avg_rows = query_all(avg_sql, [genre.lower(), min_votes])
+    genre_avg = (
+        avg_rows[0]["genreAvg"]
+        if avg_rows and avg_rows[0]["genreAvg"] is not None
+        else None
+    )
+
+    return jsonify({
+        "genre": genre,
+        "genreAvg": genre_avg,
+        "count": len(movies),
+        "movies": movies,
+    }), 200
 
 # ==========================
 #  MOVIE DETAILS

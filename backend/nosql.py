@@ -233,3 +233,107 @@ def get_user_logs(user_id):
             "ts": d.get("ts").isoformat() if d.get("ts") else None,
         })
     return jsonify(out), 200
+
+@nosql_bp.get("/api/search_trending")
+def get_trending_searches():
+    """
+    Return globally trending search queries based on recent logs.
+    TTL on search_logs (ts field) ensures these only cover the last N days.
+    
+    Query params (optional):
+      limit      - max number of rows (default 10)
+      min_count  - minimum occurrences to be considered trending (default 2)
+    """
+    limit = request.args.get("limit", type=int) or 10
+    min_count = request.args.get("min_count", type=int) or 1
+
+    pipeline = [
+        {"$group": {"_id": "$q", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gte": min_count}}},
+        {"$sort": {"count": -1}},
+        {"$limit": limit},
+    ]
+
+    docs = list(logs_col.aggregate(pipeline))
+    out = [{"q": d.get("_id", ""), "count": d.get("count", 0)} for d in docs]
+    return jsonify(out), 200
+
+@nosql_bp.get("/api/top_user_rated")
+def get_top_user_rated():
+    """
+    Returns top movies ranked by average user 'stars' from Mongo reviews.
+    Query params:
+      limit        - how many movies to return (default 10)
+      min_reviews  - minimum number of reviews to be considered (default 2)
+    """
+    limit = request.args.get("limit", default=10, type=int)
+    min_reviews = request.args.get("min_reviews", default=2, type=int)
+
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$tconst",
+                "avgStars": {"$avg": "$stars"},
+                "reviewCount": {"$sum": 1},
+            }
+        },
+        {"$match": {"reviewCount": {"$gte": min_reviews}}},
+        {"$sort": {"avgStars": -1, "reviewCount": -1}},
+        {"$limit": limit},
+    ]
+
+    agg = list(reviews_col.aggregate(pipeline))
+
+    if not agg:
+        return jsonify([]), 200
+
+    tconsts = [doc["_id"] for doc in agg]
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    format_strings = ",".join(["%s"] * len(tconsts))
+    cur.execute(
+        f"""
+        SELECT
+          t.tconst,
+          t.primaryTitle AS title,
+          t.startYear    AS year,
+          t.averageRating AS rating,
+          GROUP_CONCAT(DISTINCT g.genreName ORDER BY g.genreName) AS genres
+        FROM Title t
+        LEFT JOIN HasGenre hg ON hg.tconst = t.tconst
+        LEFT JOIN Genre    g  ON g.genreID = hg.genreID
+        WHERE t.tconst IN ({format_strings})
+        GROUP BY
+          t.tconst, t.primaryTitle, t.startYear, t.averageRating
+        """,
+        tconsts,
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    row_by_tconst = {r["tconst"]: r for r in rows}
+
+    result = []
+    for doc in agg:
+        tconst = doc["_id"]
+        avg_stars = doc["avgStars"]
+        count = doc["reviewCount"]
+        r = row_by_tconst.get(tconst)
+        if not r:
+            continue
+
+        genres_list = r["genres"].split(",") if r["genres"] else []
+        result.append({
+            "tconst": tconst,
+            "title": r["title"],
+            "year": r["year"],
+            "genres": genres_list,
+            "rating_system": r["rating"],     
+            "rating_users": round(avg_stars, 1),  
+            "reviewCount": count,
+        })
+
+    return jsonify(result), 200
