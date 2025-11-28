@@ -63,6 +63,8 @@ mongorestore --db project2_nosql mongo_export/project2_nosql
 
 Alternatively, run this within MongoDB Compass:
 ```
+use project2_nosql;
+
 db.createCollection("reviews", {
   validator: {
     $jsonSchema: {
