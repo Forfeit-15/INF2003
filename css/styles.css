@@ -53,9 +53,9 @@ body { margin: 0; background: #0f172a; color: #e2e8f0; }
 }
 
 /* Fallback if JS isn't bound yet */
-.dropdown:hover .dropdown-content, .dropdown:focus-within .dropdown-content {
+/*.dropdown:hover .dropdown-content, .dropdown:focus-within .dropdown-content {
   display: block; opacity: 1; transform: translateY(0);
-}
+}*/
 
 /* === PROFILE ICON === */
 .profile-btn { background: transparent; border: 0; padding: 0; cursor: pointer; transition: opacity 0.2s ease; }
@@ -169,4 +169,88 @@ section h1 { border-bottom: 1px solid rgba(148,163,184,0.15); padding-bottom: 0.
   .nav-menu { gap: 0.75rem; }
   .search-form input { width: 160px; }
   .modal-content { margin: 2vh 1rem; max-width: calc(100% - 2rem); }
+}
+/* ADMIN TABLE STYLE */
+.admin-container {
+  max-width: 960px;
+  overflow-x: auto;
+}
+
+.user-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px auto 0 auto;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  table-layout: fixed; /* keeps columns consistent */
+}
+
+/* Default: left-align text columns */
+.user-table th,
+.user-table td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  text-align: left;
+  word-wrap: break-word;
+}
+
+/* Header styling */
+.user-table th {
+  font-weight: 600;
+  color: #60a5fa;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Center numeric / boolean columns: ID, Admin?, Active? */
+.user-table th:nth-child(1),
+.user-table td:nth-child(1),
+.user-table th:nth-child(5),
+.user-table td:nth-child(5),
+.user-table th:nth-child(6),
+.user-table td:nth-child(6) {
+  text-align: center;
+}
+
+/* Give the Actions column a fixed-ish width and right alignment */
+.user-table th:nth-child(7),
+.user-table td:nth-child(7) {
+  text-align: right;
+  width: 260px;
+}
+
+/* Action buttons inline and neat */
+.action-btns {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.btn-action {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  border: none;
+  cursor: pointer;
+  background: #1e293b;
+  color: #e2e8f0;
+  transition: 0.2s;
+}
+
+.btn-action:hover {
+  background: #334155;
+}
+
+.btn-delete {
+  background: #dc2626;
+}
+
+.btn-delete:hover {
+  background: #b91c1c;
+}
+
+.self-note {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-style: italic;
 }
