@@ -78,15 +78,26 @@
     </div>
 
     <!-- BOTTOM FULL-WIDTH ROW: Top User Rated -->
-    <section id="top-user-rated" class="topuser-footer">
+    <section id="top-user" class="topuser-footer">
       <div class="section-header">
         <h1>Top User Rated</h1>
         <button class="browse-all-btn">Browse all</button>
       </div>
-      <p id="top-user-count" aria-live="polite"></p>
-      <div id="top-user-container" class="cards"></div>
-      <div id="topuser-pagination" class="pagination"></div>
+      <p id="top-user-count"></p>
+
+      <div class="topuser-row">
+        <button class="topuser-nav topuser-prev" aria-label="Scroll left">
+          ‹
+        </button>
+
+        <div id="top-user-container"></div>
+
+        <button class="topuser-nav topuser-next" aria-label="Scroll right">
+          ›
+        </button>
+      </div>
     </section>
+
   </main>
 
   <!-- Watchlist Modal -->
