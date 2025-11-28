@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Mini IMDB</title>
+  <title>MovieBase</title>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
   <!-- Navbar -->
   <nav class="navbar">
     <div class="nav-left">
-      <button class="logo" id="home-logo" aria-label="Go to home">Mini IMDB</button>
+      <button class="logo" id="home-logo" aria-label="Go to home">MovieBase</button>
 
       <form class="search-form" onsubmit="return false;">
         <input type="text" id="search-input" placeholder="Search..." aria-label="Search movies" />
@@ -47,28 +47,45 @@
   </nav>
 
   <main class="content">
-    <section id="movies">
-      <h1>Movies & Shows</h1>
-      <p id="movies-count" aria-live="polite"></p>
-      <div id="movies-container" class="cards"></div>
-    </section>
+    <!-- MAIN TWO-COLUMN AREA -->
+    <div class="content-main">
+      <!-- LEFT: Movies + Actors -->
+      <div class="content-left">
+        <section id="movies">
+          <h1>Movies & Shows</h1>
+          <p id="movies-count" aria-live="polite"></p>
+          <div id="movies-container" class="cards"></div>
+          <div id="movies-pagination" class="pagination"></div>
+        </section>
 
-    <section id="top-user-rated">
-      <h1>Top user-rated (community)</h1>
+        <section id="actors">
+          <h1>Actors</h1>
+          <p id="actors-count" aria-live="polite"></p>
+          <div id="actors-container" class="cards"></div>
+          <div id="actors-pagination" class="pagination"></div>
+        </section>
+      </div>
+
+      <!-- RIGHT: Genres panel -->
+      <aside class="content-right">
+        <section id="genres">
+          <h1>Genres</h1>
+          <p id="genres-count" aria-live="polite"></p>
+          <div id="genres-container" class="cards"></div>
+          <div id="genres-pagination" class="pagination"></div>
+        </section>
+      </aside>
+    </div>
+
+    <!-- BOTTOM FULL-WIDTH ROW: Top User Rated -->
+    <section id="top-user-rated" class="topuser-footer">
+      <div class="section-header">
+        <h1>Top User Rated</h1>
+        <button class="browse-all-btn">Browse all</button>
+      </div>
       <p id="top-user-count" aria-live="polite"></p>
       <div id="top-user-container" class="cards"></div>
-    </section>
-
-    <section id="actors">
-      <h1>People</h1>
-      <p id="actors-count" aria-live="polite"></p>
-      <div id="actors-container" class="cards"></div>
-    </section>
-
-    <section id="genres">
-      <h1>Genres</h1>
-      <p id="genres-count" aria-live="polite"></p>
-      <div id="genres-container" class="cards"></div>
+      <div id="topuser-pagination" class="pagination"></div>
     </section>
   </main>
 
@@ -141,6 +158,7 @@
       </section>
     </div>
   </div>
+
   <!-- Search History Modal -->
   <div class="modal" id="searchlog-modal" hidden role="dialog" aria-modal="true" aria-labelledby="searchlog-title">
     <div class="modal-backdrop" id="searchlog-backdrop"></div>
