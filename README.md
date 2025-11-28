@@ -8,6 +8,7 @@ MongoDB server running locally (default mongodb://localhost:27017)
 ```
 ## Getting Started:
 ```
+cd backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
