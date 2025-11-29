@@ -1,5 +1,5 @@
 /* =========================================================
-   Mini IMDB – Frontend App (SQL/NoSQL aligned)
+   MovieBase – Frontend App (SQL/NoSQL aligned)
    - Reviews: frontend-only (localStorage) + hard-coded others
    - Watchlist: legacy localStorage + “View Watchlist” in profile
    - Search logs: localStorage
@@ -321,6 +321,34 @@ async function fetchWatchlist() {
   }
 }
 
+// Use the same key format everywhere
+function makeMovieKey(movie) {
+  return `${movie.title} (${movie.year})`;
+}
+
+// Store keys for movies in watchlist so UI can show "Added"
+let watchlistKeys = new Set();
+
+function updateWatchlistButtonState(key, added) {
+  document.querySelectorAll(".btn-watchlist").forEach((btn) => {
+    if (btn.dataset.key !== key) return;
+
+    const icon = btn.querySelector(".btn-watchlist-icon");
+    const label = btn.querySelector(".btn-watchlist-label");
+
+    if (added) {
+      btn.classList.add("btn-watchlist-added");
+      if (icon) icon.textContent = "✓";
+      if (label) label.textContent = "Added";
+    } else {
+      btn.classList.remove("btn-watchlist-added");
+      if (icon) icon.textContent = "＋";
+      if (label) label.textContent = "Watchlist";
+    }
+  });
+}
+
+
 function resolveTconst(movie) {
   return movie && movie.tconst ? movie.tconst : null;
 }
@@ -343,6 +371,19 @@ async function addToWatchlist(movie) {
     setLegacyWatchlist(list);
   }
 
+  // ---- UI state (always, even if not logged in) ----
+  // assumes you declared: let watchlistKeys = new Set(); at the top of app.js
+  if (typeof watchlistKeys === "undefined") {
+    // safety, in case it wasn't declared for some reason
+    window.watchlistKeys = new Set();
+  }
+  watchlistKeys.add(key);
+
+  // assumes you have updateWatchlistButtonState(key, added)
+  if (typeof updateWatchlistButtonState === "function") {
+    updateWatchlistButtonState(key, true); // switch to "Added" in the UI
+  }
+
   // ---- Server (Mongo) ----
   if (!isLoggedIn()) return;
 
@@ -363,6 +404,27 @@ async function addToWatchlist(movie) {
     console.warn("Watchlist API unreachable, saved locally only:", err);
   }
 }
+
+
+function updateWatchlistButtonState(key, added) {
+  document.querySelectorAll(".btn-watchlist").forEach((btn) => {
+    if (btn.dataset.key !== key) return;
+
+    const icon = btn.querySelector(".btn-watchlist-icon");
+    const label = btn.querySelector(".btn-watchlist-label");
+
+    if (added) {
+      btn.classList.add("btn-watchlist-added");
+      if (icon) icon.textContent = "✓";
+      if (label) label.textContent = "Added";
+    } else {
+      btn.classList.remove("btn-watchlist-added");
+      if (icon) icon.textContent = "＋";
+      if (label) label.textContent = "Watchlist";
+    }
+  });
+}
+
 
 async function removeFromWatchlistByKey(key) {
   if (!key) return;
@@ -394,34 +456,101 @@ async function removeFromWatchlistByKey(key) {
 }
 
 async function renderWatchlistModal() {
-  if (!watchlistBody) return;
+  if (!watchlistModal || !watchlistBody) return;
 
+  // Show modal + initial loading text
+  watchlistModal.hidden = false;
   watchlistBody.innerHTML = "<p>Loading watchlist...</p>";
 
-  const list = await fetchWatchlist();
+  let items = [];
 
-  if (!list.length) {
-    watchlistBody.innerHTML = "<p>No items in your watchlist yet.</p>";
+  // ---- 1) Local cache (legacy) ----
+  try {
+    const legacy = getLegacyWatchlist();
+    if (Array.isArray(legacy)) {
+      items = [...legacy];
+    }
+  } catch (err) {
+    console.warn("Failed to read legacy watchlist:", err);
+  }
+
+  // ---- 2) Server (Mongo) ----
+  if (isLoggedIn()) {
+    const user = getUser();
+    const userId = user?.id || user?.user_id;
+
+    if (userId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/watchlist/${userId}`);
+        if (res.ok) {
+          const serverItems = await res.json();
+
+          // merge local + server by key
+          const byKey = new Map();
+
+          for (const m of items) {
+            const key = m.key || `${m.title} (${m.year})`;
+            byKey.set(key, { ...m, key });
+          }
+
+          for (const m of serverItems || []) {
+            const key = m.key || `${m.title} (${m.year})`;
+            if (!byKey.has(key)) {
+              byKey.set(key, { ...m, key });
+            }
+          }
+
+          items = Array.from(byKey.values());
+
+          // keep local cache in sync
+          setLegacyWatchlist(items);
+        } else {
+          console.warn("Failed to fetch watchlist from server:", res.status);
+        }
+      } catch (err) {
+        console.warn("Watchlist API unreachable:", err);
+      }
+    }
+  }
+
+  // ---- 3) Sync global watchlistKeys ----
+  if (typeof watchlistKeys === "undefined") {
+    window.watchlistKeys = new Set();
+  }
+  watchlistKeys = new Set(
+    items.map((m) => m.key || `${m.title} (${m.year})`)
+  );
+
+  // ---- 4) Render list ----
+  if (!items.length) {
+    watchlistBody.innerHTML = "<p>Your watchlist is empty.</p>";
     return;
   }
 
-  watchlistBody.innerHTML = `
+  const listHtml = `
     <ul class="watchlist-list">
-      ${list
-        .map((m) => {
-          const key = `${m.title} (${m.year})`;
+      ${items
+        .map((movie) => {
+          const key = movie.key || `${movie.title} (${movie.year})`;
+          const title =
+            escapeHtml(movie.title || movie.primaryTitle || "Untitled");
+          const year = movie.year || movie.startYear || "";
+          const rating =
+            movie.rating ?? movie.averageRating ?? movie.ratingAvg ?? "";
+          const metaPieces = [];
+          if (year) metaPieces.push(year);
+          if (rating) metaPieces.push(`⭐ ${rating}`);
+
           return `
             <li>
               <div class="watchlist-main">
-                <span class="watchlist-title">${escapeHtml(key)}</span>
-                <span class="watchlist-meta">
-                  ${escapeHtml(m.genres || "")}
-                  ${m.rating ? ` • ⭐ ${m.rating.toFixed ? m.rating.toFixed(1) : m.rating}` : ""}
-                </span>
+                <div class="watchlist-title">${title}</div>
+                <div class="watchlist-meta">
+                  ${metaPieces.join(" • ")}
+                </div>
               </div>
               <button class="remove-watchlist-btn"
-                      data-key="${escapeHtml(key)}"
-                      aria-label="Remove from watchlist">
+                      data-key="${escapeHtml(key)}">
                 Remove
               </button>
             </li>
@@ -430,7 +559,10 @@ async function renderWatchlistModal() {
         .join("")}
     </ul>
   `;
+
+  watchlistBody.innerHTML = listHtml;
 }
+
 
 function openWatchlist() {
   if (!watchlistModal) return;
@@ -463,7 +595,9 @@ if (watchlistBody) {
     const key = btn.dataset.key;
     if (!key) return;
     await removeFromWatchlistByKey(key);
+    updateWatchlistButtonState(key, false);  // reset buttons on main page
     await renderWatchlistModal();
+
   });
 }
 
@@ -579,6 +713,52 @@ async function fetchReviews(tconst) {
 }
 
 /* ================================
+   PAGINATION ENGINE (client-side)
+================================ */
+
+function paginate(array, page = 1, perPage = 12) {
+  const total = array.length;
+  const pages = Math.ceil(total / perPage);
+  const start = (page - 1) * perPage;
+  return {
+    page,
+    perPage,
+    total,
+    pages,
+    items: array.slice(start, start + perPage)
+  };
+}
+
+function renderPagination(container, pages, current, callback) {
+  if (!container) return;
+  if (pages <= 1) {
+    container.innerHTML = "";
+    return;
+  }
+
+  let html = "";
+
+  if (current > 1)
+    html += `<button data-page="${current - 1}">‹ Prev</button>`;
+
+  for (let i = 1; i <= pages; i++) {
+    html += `<button data-page="${i}" class="${i === current ? "active" : ""}">${i}</button>`;
+  }
+
+  if (current < pages)
+    html += `<button data-page="${current + 1}">Next ›</button>`;
+
+  container.innerHTML = html;
+
+  container.onclick = (e) => {
+    const btn = e.target.closest("button[data-page]");
+    if (!btn) return;
+    const pg = Number(btn.dataset.page);
+    callback(pg);
+  };
+}
+
+/* ================================
    RENDER HELPERS
 ==================================*/
 
@@ -592,13 +772,14 @@ function escapeHtml(text) {
 
 function renderMovies(movies) {
   currentMovies = movies;
+
   if (!movies.length) {
     moviesContainer.innerHTML = "<p>No movies found.</p>";
     moviesCount.textContent = "0 result(s)";
     return;
   }
 
-  const canWatchlist = isLoggedIn();  // 👈 NEW
+  const canWatchlist = isLoggedIn();
 
   moviesContainer.innerHTML = movies
     .map((m) => {
@@ -608,27 +789,47 @@ function renderMovies(movies) {
         : m.genre || "";
       const ratingVal = m.rating ?? m.averageRating ?? m.ratingAvg ?? "";
       const escapedTitle = escapeHtml(m.title);
+      const escapedKey = escapeHtml(key);
 
+      // --- NEW: determine if already in watchlist ---
+      const inWatchlist =
+        typeof watchlistKeys !== "undefined" &&
+        watchlistKeys.has(key);
+
+      // --- UPDATED BUTTON HTML ---
       const addBtnHtml = canWatchlist
         ? `
-          <button class="add-btn"
-                  title="Add ${escapedTitle} to Watchlist"
-                  aria-label="Add ${escapedTitle} to Watchlist"
-                  data-key="${escapeHtml(key)}">+</button>
+          <button
+            class="btn-watchlist ${inWatchlist ? "btn-watchlist-added" : ""}"
+            title="${inWatchlist ? `In Watchlist` : `Add ${escapedTitle} to watchlist`}"
+            aria-label="Add ${escapedTitle} to watchlist"
+            data-key="${escapedKey}"
+          >
+            <span class="btn-watchlist-icon">
+              ${inWatchlist ? "✓" : "＋"}
+            </span>
+            <span class="btn-watchlist-label">
+              ${inWatchlist ? "Added" : "Watchlist"}
+            </span>
+          </button>
         `
-        : ""; // no button for guests
+        : ""; // not logged in → hide button
 
       return `
-        <article class="card"
-                 data-key="${escapeHtml(key)}"
+        <article class="card media-card"
+                 data-key="${escapedKey}"
                  tabindex="0"
                  role="button"
                  aria-label="Open ${escapedTitle}">
+          <div class="media-main">
+            <div class="media-title">${escapedTitle}</div>
+            <div class="media-meta">
+              ${m.year} • ${escapeHtml(genresStr)}${
+                ratingVal ? ` • ⭐ ${ratingVal}` : ""
+              }
+            </div>
+          </div>
           ${addBtnHtml}
-          <h2>${escapedTitle}</h2>
-          <p class="meta">
-            ${m.year} • ${escapeHtml(genresStr)} • ⭐ ${ratingVal}
-          </p>
         </article>
       `;
     })
@@ -636,6 +837,7 @@ function renderMovies(movies) {
 
   moviesCount.textContent = `${movies.length} result(s)`;
 }
+
 
 
 function renderActors(people) {
@@ -652,12 +854,15 @@ function renderActors(people) {
           ? `b. ${p.birthYear}`
           : `${p.birthYear}–${p.deathYear}`;
       const prof = (p.professions || []).join(", ");
+
       return `
-        <article class="card">
-          <h2>${escapeHtml(p.primaryName)}</h2>
-          <p class="meta">
-            ${life}${prof ? " • " + escapeHtml(prof) : ""}
-          </p>
+        <article class="card media-card">
+          <div class="media-main">
+            <div class="media-title">${escapeHtml(p.primaryName)}</div>
+            <div class="media-meta">
+              ${life}${prof ? " • " + escapeHtml(prof) : ""}
+            </div>
+          </div>
         </article>
       `;
     })
@@ -666,6 +871,7 @@ function renderActors(people) {
   actorsCount.textContent = `${people.length} result(s)`;
 }
 
+
 function renderGenres(genres) {
   if (!genres.length) {
     genresContainer.innerHTML = "<p>No genres found.</p>";
@@ -673,7 +879,7 @@ function renderGenres(genres) {
     return;
   }
 
-    genresContainer.innerHTML = genres
+  genresContainer.innerHTML = genres
     .map(
       (g) => `
       <article class="card"
@@ -737,6 +943,114 @@ function renderTopUserRated(list) {
 
   topUserCount.textContent = `${list.length} result(s)`;
 }
+
+/* ==========
+   PAGED WRAPPERS
+========== */
+
+let moviesRaw = [];
+let moviesPage = 1;
+
+function renderMoviesPaged(list, page = 1) {
+  moviesRaw = list;
+  moviesPage = page;
+
+  const p = paginate(list, page, 14);
+  renderMovies(p.items);
+
+  renderPagination(
+    document.getElementById("movies-pagination"),
+    p.pages,
+    p.page,
+    (pg) => renderMoviesPaged(moviesRaw, pg)
+  );
+}
+
+let actorsRaw = [];
+let actorsPage = 1;
+
+function renderActorsPaged(list, page = 1) {
+  actorsRaw = list;
+  actorsPage = page;
+
+  const p = paginate(list, page, 15);
+  renderActors(p.items);
+
+  renderPagination(
+    document.getElementById("actors-pagination"),
+    p.pages,
+    p.page,
+    (pg) => renderActorsPaged(actorsRaw, pg)
+  );
+}
+
+let genresRaw = [];
+let genresPage = 1;
+
+function renderGenresPaged(list, page = 1) {
+  genresRaw = list;
+  genresPage = page;
+
+  const p = paginate(list, page, 30);
+  renderGenres(p.items);
+
+  renderPagination(
+    document.getElementById("genres-pagination"),
+    p.pages,
+    p.page,
+    (pg) => renderGenresPaged(genresRaw, pg)
+  );
+}
+
+let topUserRaw = [];
+let topUserPage = 1;
+
+function renderTopUserRatedPaged(list, page = 1) {
+  topUserRaw = list;
+  topUserPage = page;
+
+  const p = paginate(list, page, 12);
+  renderTopUserRated(p.items);
+
+  renderPagination(
+    document.getElementById("topuser-pagination"),
+    p.pages,
+    p.page,
+    (pg) => renderTopUserRatedPaged(topUserRaw, pg)
+  );
+}
+
+// === Top User Rated horizontal nav ===
+const topUserPrev = document.querySelector(".topuser-prev");
+const topUserNext = document.querySelector(".topuser-next");
+
+function updateTopUserNavState() {
+  if (!topUserContainer || !topUserPrev || !topUserNext) return;
+
+  const maxScroll = topUserContainer.scrollWidth - topUserContainer.clientWidth;
+  const x = topUserContainer.scrollLeft || 0;
+
+  topUserPrev.disabled = x <= 1;
+  topUserNext.disabled = x >= maxScroll - 1;
+}
+
+if (topUserContainer && topUserPrev && topUserNext) {
+  const scrollAmount = () =>
+    Math.max(260, Math.floor(topUserContainer.clientWidth * 0.9));
+
+  topUserPrev.addEventListener("click", () => {
+    topUserContainer.scrollBy({ left: -scrollAmount(), behavior: "smooth" });
+  });
+
+  topUserNext.addEventListener("click", () => {
+    topUserContainer.scrollBy({ left: scrollAmount(), behavior: "smooth" });
+  });
+
+  topUserContainer.addEventListener("scroll", updateTopUserNavState);
+
+  requestAnimationFrame(updateTopUserNavState);
+}
+
 
 /* ================================
    DROPDOWNS
@@ -1175,7 +1489,7 @@ async function renderMovieDetail(movie) {
 async function filterMovies(params) {
   try {
     const data = await fetchData("movies", params);
-    renderMovies(data);
+    renderMoviesPaged(data);
   } catch (err) {
     console.error("Error filtering movies:", err);
     moviesContainer.innerHTML =
@@ -1193,7 +1507,7 @@ async function filterAboveGenreAvg(genreName) {
     const data = payload.movies || [];
     const genreAvg = payload.genreAvg;
 
-    renderMovies(data);
+    renderMoviesPaged(data);
 
     if (moviesCount) {
       let text = `${data.length} standout result(s) for "${genreName}"`;
@@ -1222,11 +1536,11 @@ async function loadAll() {
       fetchData("top_user_rated", { limit: 10, min_reviews: 2 }),
     ]);
 
-    renderMovies(movies);
+    renderMoviesPaged(movies);
     populateDropdowns(movies);
-    renderActors(people);
-    renderGenres(genres);
-    renderTopUserRated(topUser);
+    renderActorsPaged(people);
+    renderGenresPaged(genres);
+    renderTopUserRatedPaged(topUser);
   } catch (err) {
     console.error("Error loading data:", err);
   }
@@ -1271,31 +1585,19 @@ if (homeLogo) {
 
 if (moviesContainer) {
   moviesContainer.addEventListener("click", async (e) => {
-    const addBtn = e.target.closest(".add-btn");
+    const addBtn = e.target.closest(".btn-watchlist");
     if (addBtn) {
-      const key = addBtn.dataset.key;
-      const movie = currentMovies.find(
-        (m) => `${m.title} (${m.year})` === key
-      );
-      if (movie) {
-        addToWatchlist(movie);
-        addBtn.textContent = "✓";
-        addBtn.setAttribute(
-          "aria-label",
-          `${movie.title} added to watchlist`
-        );
-        setTimeout(() => {
-          addBtn.textContent = "+";
-          addBtn.setAttribute(
-            "aria-label",
-            `Add ${movie.title} to Watchlist`
-          );
-        }, 900);
-      }
-      return;
-    }
+  const key = addBtn.dataset.key;
+  const movie = currentMovies.find((m) => `${m.title} (${m.year})` === key);
+  if (movie) {
+    await addToWatchlist(movie);
+    updateWatchlistButtonState(key, true);
+  }
+  return;
+}
 
-    const card = e.target.closest(".card");
+
+    const card = e.target.closest(".media-card");
     if (card) {
       const key = card.dataset.key;
       const movie = currentMovies.find(
@@ -1307,7 +1609,7 @@ if (moviesContainer) {
 
   moviesContainer.addEventListener("keydown", async (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
-    const card = e.target.closest(".card");
+    const card = e.target.closest(".media-card");
     if (!card) return;
     e.preventDefault();
     const key = card.dataset.key;
@@ -1317,6 +1619,7 @@ if (moviesContainer) {
     if (movie) await renderMovieDetail(movie);
   });
 }
+
 
 if (genresContainer) {
   // Click with mouse
@@ -1511,5 +1814,3 @@ if (searchHistoryBtn) {
 
 migrateListsToLegacyOnce();
 loadAll();
-
-
