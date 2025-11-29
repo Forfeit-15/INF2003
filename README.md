@@ -113,6 +113,19 @@ db.createCollection("search_logs", {
     }
   }
 });
+
+db.reviews.createIndex({ tconst: 1, created_at: -1 });
+db.reviews.createIndex({ user_id: 1, tconst: 1 }, { unique: true }); 
+// full-text search on review text
+db.reviews.createIndex({ text: "text" });  
+                            
+// search_logs
+// Recent searches
+db.search_logs.createIndex({ user_id: 1, ts: -1 }); 
+// Efficient counting/grouping by query ("top queries" functionality)
+db.search_logs.createIndex({ q: 1, ts: -1 });
+db.search_logs.createIndex({ ts: 1 }, { expireAfterSeconds: 9999 });
+
 ```
 ## Running the backend
 With the virtual environment activated and dependencies installed:
