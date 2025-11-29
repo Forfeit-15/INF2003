@@ -16,7 +16,7 @@ pip install -r requirements.txt
 
 ## MySQL Setup
 ```
-Open the dump script included and execute it.
+Open the dump script included with Workbench and execute it.
 ```
 
 Make sure the database name and credentials match db.py and auth.py:
@@ -46,22 +46,13 @@ Database: project2_nosql
 
 Collections: reviews, watchlists, search_logs
 
-You don't have to add them manually. 
-They are automatically created when you add a review, add something to watchlist or perform a search.
-
 If your MongoDB runs elsewhere, change the URI or DB name:
 ```
 #nosql.py
 client = MongoClient("mongodb://localhost:27017")
 db = client["project2_nosql"]
 ```
-
-Import the mongodump files. You might need to install MongoDB Database Tools for this.
-```
-mongorestore --db project2_nosql mongo_export/project2_nosql
-```
-
-Alternatively, run this within MongoDB Compass:
+Run this in the shell of MongoDB Compass:
 ```
 use project2_nosql;
 
@@ -121,6 +112,11 @@ db.createCollection("search_logs", {
     }
   }
 });
+```
+
+Alternatively, import the mongodump files. You might need to install MongoDB Database Tools for this. (Not recommended)
+```
+mongorestore --db project2_nosql mongo_export/project2_nosql
 ```
 
 ## Running the backend
