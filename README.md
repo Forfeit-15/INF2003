@@ -113,12 +113,6 @@ db.createCollection("search_logs", {
   }
 });
 ```
-
-Alternatively, import the mongodump files. You might need to install MongoDB Database Tools for this. (Not recommended)
-```
-mongorestore --db project2_nosql mongo_export/project2_nosql
-```
-
 ## Running the backend
 With the virtual environment activated and dependencies installed:
 ```
