@@ -104,6 +104,7 @@ db.createCollection("search_logs", {
       bsonType: "object",
       required: ["user_id", "q", "ts"],
       properties: {
+        _id:     { bsonType: "objectId},
         user_id: { bsonType: "int" },
         q:       { bsonType: "string", minLength: 1, maxLength: 200 },
         ts:      { bsonType: "date" }
