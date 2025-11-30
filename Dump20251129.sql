@@ -164,6 +164,8 @@ CREATE TABLE `person` (
   `primaryName` varchar(255) NOT NULL,
   `birthYear` int DEFAULT NULL,
   `deathYear` int DEFAULT NULL,
+  CHECK (`birthYear` IS NULL OR `birthYear` >= 1700),
+  CHECK (`deathYear` IS NULL OR `deathYear` >= `birthYear`),
   PRIMARY KEY (`nconst`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
